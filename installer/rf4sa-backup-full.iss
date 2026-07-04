@@ -14,7 +14,7 @@ AppUpdatesURL={#AppURL}
 DefaultDirName={autopf}\RF4BackupTool
 DefaultGroupName=RF4 Backup Tool
 AllowNoIcons=yes
-LicenseFile=LICENSE
+LicenseFile=../LICENSE
 InfoAfterFile=README.txt
 OutputDir=output
 OutputBaseFilename=rf4sa-backup-full-setup-v1.2.0
@@ -43,10 +43,10 @@ Name: "bash"; Description: "Linux/Mac Shell (rf4sa-backup.sh)";   Types: full
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "rf4sa-backup-gui.ps1"; DestDir: "{app}"; Flags: ignoreversion; Components: gui
-Source: "rf4sa-backup.ps1";     DestDir: "{app}"; Flags: ignoreversion; Components: cli
-Source: "rf4sa-backup.sh";      DestDir: "{app}"; Flags: ignoreversion; Components: bash
-Source: "LICENSE";               DestDir: "{app}"; Flags: ignoreversion
+Source: "../rf4sa-backup-gui.ps1"; DestDir: "{app}"; Flags: ignoreversion; Components: gui
+Source: "../rf4sa-backup.ps1";     DestDir: "{app}"; Flags: ignoreversion; Components: cli
+Source: "../rf4sa-backup.sh";      DestDir: "{app}"; Flags: ignoreversion; Components: bash
+Source: "../LICENSE";               DestDir: "{app}"; Flags: ignoreversion
 Source: "README.txt";            DestDir: "{app}"; Flags: ignoreversion isreadme
 
 [Icons]

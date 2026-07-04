@@ -14,7 +14,7 @@ AppUpdatesURL={#AppURL}
 DefaultDirName={autopf}\RF4BackupTool
 DefaultGroupName=RF4 Backup Tool
 AllowNoIcons=yes
-LicenseFile=LICENSE
+LicenseFile=../LICENSE
 InfoAfterFile=README.txt
 OutputDir=output
 OutputBaseFilename=rf4sa-backup-gui-setup-v1.2.0
@@ -32,8 +32,8 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "rf4sa-backup-gui.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "LICENSE";               DestDir: "{app}"; Flags: ignoreversion
+Source: "../rf4sa-backup-gui.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "../LICENSE";               DestDir: "{app}"; Flags: ignoreversion
 Source: "README.txt";            DestDir: "{app}"; Flags: ignoreversion isreadme
 
 [Icons]
