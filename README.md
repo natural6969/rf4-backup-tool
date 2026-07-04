@@ -50,10 +50,22 @@ Spielstand, Inventar und Angelausrüstung liegen auf den RF4-Servern und sind be
 - **Backup** — sichert Daten in einen Ordner deiner Wahl
 - **Restore** — importiert ein Backup in eine Installation
 - **Merge** — führt zwei Installationen zusammen (nur fehlende Nachrichten werden ergänzt, nichts überschrieben)
+- **Cloud / NAS Sync** — bidirektionaler Sync zwischen mehreren Geräten über Nextcloud, Syncthing, NAS-Netzlaufwerk, USB-Stick oder jeden gemeinsamen Ordner
 
 ---
 
 ## Benutzung
+
+### Windows — Cloud / NAS Sync
+
+Menüpunkt **[5] Sync** → Sync-Ordner angeben (Nextcloud, Syncthing, NAS `N:\`, USB-Stick oder jeder gemeinsame Ordner) → Sync starten.
+
+Der Sync läuft bidirektional:
+- **Phase 1** – Lokale Mailboxen werden in den Sync-Ordner gemergt (Push)
+- **Phase 2** – Neue Nachrichten aus dem Sync-Ordner werden lokal übernommen (Pull)
+- Settings.dat / Preferences.dat / Crafting.dat: neuere Datei gewinnt (Zeitstempel-Vergleich)
+
+---
 
 ### Windows — Installer (empfohlen)
 
