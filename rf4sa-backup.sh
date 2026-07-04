@@ -9,8 +9,10 @@
 # Download:      https://nga.li/rf4dl
 # Transfer-Info: https://nga.li/rf4transfer  (nur Steam → Standalone)
 #
-# Version 1.1.0 – 2026-06-23
+# Version 1.2.0 – 2026-07-04
 # Changelog:
+#   1.2.0  Cloud/NAS-Sync (bidirektional, ordnerbasiert: Nextcloud/NAS/USB/Syncthing)
+#   1.1.1  Header-Links aktualisiert (nga.li/rf4b + Codeberg)
 #   1.1.0  Standalone-Labels, Account-IDs im Scan, Per-Account Backup/Restore,
 #          Multi-Quellen Merge, nga.li-Links, Linux→Linux Unterstützung
 #   1.0.0  Erstveröffentlichung
@@ -22,6 +24,9 @@ R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' B='\033[1;34m' C='\033[0;36m'
 W='\033[1;37m' D='\033[2m' NC='\033[0m'
 
 # ── Konfiguration ──────────────────────────────────────────────────────────────
+SYNC_CONFIG_DIR="$HOME/.config/rf4-backup"
+SYNC_CONFIG="$SYNC_CONFIG_DIR/sync.conf"
+
 # SA + Steam als Varianten (Steam separat markiert)
 RF4_VARIANTS=(RussianFishing4DE RussianFishing4DE_new RussianFishing4EN RussianFishing4Steam)
 declare -A VARIANT_LABELS=(
@@ -37,7 +42,7 @@ SCREENSHOT_SUBPATH="Documents/Russian Fishing 4/Screenshots"
 DEFAULT_BACKUP_DIR="$HOME/RF4_Backup"
 
 # ── Links ──────────────────────────────────────────────────────────────────────
-RF4_BLOG="https://nga.li/rf4backup"
+RF4_BLOG="https://nga.li/rf4b"
 RF4_LINK_DE="https://nga.li/rf4de"
 RF4_LINK_EN="https://nga.li/rf4en"
 RF4_LINK_STEAM="https://nga.li/rf4steam"
@@ -649,6 +654,174 @@ do_merge() {
     pause
 }
 
+# ── Cloud/NAS-Sync ─────────────────────────────────────────────────────────────
+sync_get_path() { [[ -f "$SYNC_CONFIG" ]] && cat "$SYNC_CONFIG" || echo ""; }
+sync_set_path() { mkdir -p "$SYNC_CONFIG_DIR" && printf '%s' "$1" > "$SYNC_CONFIG"; }
+file_mtime()    { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+
+do_sync_run() {
+    local inst_path="$1" sync_base="$2"
+    local sync_dir="$sync_base/RF4_Sync"
+    mkdir -p "$sync_dir"
+
+    echo
+    info "Lokal:  $inst_path"
+    info "Sync:   $sync_dir"
+    sep
+
+    # Phase 1: Lokal → Sync
+    echo -e "\n  ${W}↑ Phase 1: Lokal → Sync${NC} ${D}(neue Nachrichten hochladen)${NC}"
+    local any_local=0
+    for mbox in "$inst_path"/Mailbox_*/; do
+        [[ -d "$mbox" ]] || continue
+        any_local=1
+        local mname; mname=$(basename "$mbox")
+        info "  ↑ $mname"
+        merge_mailboxes "$mbox" "$sync_dir/$mname"
+    done
+    [[ $any_local -eq 0 ]] && warn "Keine lokalen Mailboxen – nur Pull wird ausgeführt."
+
+    # Phase 2: Sync → Lokal
+    echo -e "\n  ${W}↓ Phase 2: Sync → Lokal${NC} ${D}(neue Nachrichten herunterladen)${NC}"
+    local any_sync=0
+    for mbox in "$sync_dir"/Mailbox_*/; do
+        [[ -d "$mbox" ]] || continue
+        any_sync=1
+        local mname; mname=$(basename "$mbox")
+        info "  ↓ $mname"
+        merge_mailboxes "$mbox" "$inst_path/$mname"
+    done
+    [[ $any_sync -eq 0 ]] && warn "Sync-Ordner enthält noch keine Mailboxen von anderen Geräten."
+
+    # Settings/Preferences/Crafting: neuere Version gewinnt
+    echo -e "\n  ${W}⇄ Einstellungen${NC} ${D}(neuere Version gewinnt automatisch)${NC}"
+    for dat in Settings.dat Preferences.dat Crafting.dat; do
+        local lf="$inst_path/$dat" sf="$sync_dir/$dat"
+        if [[ -f "$lf" && ! -f "$sf" ]]; then
+            cp "$lf" "$sf" && ok "$dat → Sync (neu hochgeladen)"
+        elif [[ ! -f "$lf" && -f "$sf" ]]; then
+            cp "$sf" "$lf" && ok "$dat ← Sync (neu heruntergeladen)"
+        elif [[ -f "$lf" && -f "$sf" ]]; then
+            local lt st; lt=$(file_mtime "$lf"); st=$(file_mtime "$sf")
+            if   [[ $lt -gt $st ]]; then cp "$lf" "$sf" && ok "$dat → Sync (lokal neuer)"
+            elif [[ $st -gt $lt ]]; then cp "$sf" "$lf" && ok "$dat ← Sync (Sync neuer)"
+            else info "$dat: identisch, übersprungen"; fi
+        fi
+    done
+
+    printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$(hostname)" >> "$sync_dir/.sync_log"
+    echo
+    ok "Sync abgeschlossen!"
+}
+
+do_sync() {
+    hdr "CLOUD / NAS SYNC"
+    echo -e "  ${D}Ordnerbasierter Sync – funktioniert mit:${NC}"
+    echo -e "  ${D}Nextcloud · Syncthing · NAS-Laufwerk · USB · OneDrive · jeder geteilter Ordner${NC}"
+
+    while true; do
+        local sync_path; sync_path=$(sync_get_path)
+        echo
+        if [[ -z "$sync_path" ]]; then
+            echo -e "  ${Y}Kein Sync-Ordner konfiguriert.${NC}"
+        elif [[ -d "$sync_path" ]]; then
+            ok "Sync-Ordner: $sync_path"
+        else
+            warn "Sync-Ordner nicht erreichbar: $sync_path"
+            echo -e "  ${D}(NAS/Laufwerk eingebunden? Cloud-Sync aktiv?)${NC}"
+        fi
+        echo
+        echo -e "  ${Y}[1]${NC} ${W}Sync jetzt ausführen${NC} (bidirektional)"
+        echo -e "  ${Y}[2]${NC} Sync-Ordner konfigurieren"
+        echo -e "  ${Y}[3]${NC} Sync-Status anzeigen"
+        echo -e "  ${Y}[0]${NC} Zurück"
+        echo
+        read -r -p "  Wähle: " choice
+
+        case "$choice" in
+            0) return ;;
+            2)
+                echo
+                echo -e "  ${W}Sync-Ordner eingeben${NC}"
+                echo -e "  ${D}Beispiele:${NC}"
+                echo -e "  ${D}  ~/Nextcloud/RF4-Sync${NC}"
+                echo -e "  ${D}  /mnt/nas/RF4-Sync${NC}"
+                echo -e "  ${D}  /run/media/$USER/USB-Stick/RF4-Sync${NC}"
+                echo
+                read -r -p "  Pfad: " new_path
+                new_path="${new_path/#\~/$HOME}"
+                if [[ -n "$new_path" ]]; then
+                    if mkdir -p "$new_path" 2>/dev/null; then
+                        sync_set_path "$new_path"
+                        ok "Gespeichert: $new_path"
+                    else
+                        err "Ordner konnte nicht erstellt werden: $new_path"
+                    fi
+                fi
+                pause
+                ;;
+            3)
+                sync_path=$(sync_get_path)
+                echo
+                if [[ -z "$sync_path" ]]; then warn "Kein Sync-Ordner konfiguriert."; pause; continue; fi
+                if [[ ! -d "$sync_path" ]]; then err "Nicht erreichbar: $sync_path"; pause; continue; fi
+                local sync_dir="$sync_path/RF4_Sync"
+                info "Sync-Ordner: $sync_path"
+                if [[ -d "$sync_dir" ]]; then
+                    local total_mbox=0
+                    for mbox in "$sync_dir"/Mailbox_*/; do
+                        [[ -d "$mbox" ]] || continue
+                        local mname cnt; mname=$(basename "$mbox")
+                        cnt=$(ls "$mbox"*.dat 2>/dev/null | wc -l)
+                        info "  $mname: $cnt Konversationen"
+                        total_mbox=$((total_mbox+1))
+                    done
+                    [[ $total_mbox -eq 0 ]] && warn "  Noch keine Mailboxen im Sync-Ordner."
+                    for dat in Settings.dat Preferences.dat Crafting.dat; do
+                        [[ -f "$sync_dir/$dat" ]] && info "  $dat vorhanden"
+                    done
+                    if [[ -f "$sync_dir/.sync_log" ]]; then
+                        echo; info "Letzte Sync-Einträge:"
+                        tail -5 "$sync_dir/.sync_log" | while IFS= read -r line; do info "  $line"; done
+                    fi
+                else
+                    warn "Noch kein RF4_Sync-Unterordner. Ersten Sync ausführen, um ihn anzulegen."
+                fi
+                pause
+                ;;
+            1)
+                sync_path=$(sync_get_path)
+                if [[ -z "$sync_path" ]]; then warn "Bitte zuerst Sync-Ordner konfigurieren (Option 2)."; pause; continue; fi
+                if [[ ! -d "$sync_path" ]]; then
+                    err "Sync-Ordner nicht erreichbar: $sync_path"
+                    info "NAS eingebunden? Cloud-Sync aktiv? USB angesteckt?"
+                    pause; continue
+                fi
+                load_installations
+                local existing=() existing_paths=() i=0
+                for path in "${INST_PATHS[@]}"; do
+                    if [[ -d "$path" ]]; then
+                        existing+=("${INST_LABELS[$i]}")
+                        existing_paths+=("$path")
+                    fi
+                    i=$((i+1))
+                done
+                if [[ ${#existing[@]} -eq 0 ]]; then err "Keine RF4-Installationen gefunden."; pause; continue; fi
+                local inst_path
+                if [[ ${#existing[@]} -eq 1 ]]; then
+                    inst_path="${existing_paths[0]}"
+                    info "Installation: ${existing[0]}"
+                else
+                    menu "Welche Installation synchronisieren?" "${existing[@]}" || continue
+                    inst_path="${existing_paths[$((MENU_CHOICE-1))]}"
+                fi
+                do_sync_run "$inst_path" "$sync_path"
+                pause
+                ;;
+        esac
+    done
+}
+
 # ── Hauptmenü ──────────────────────────────────────────────────────────────────
 main_menu() {
     while true; do
@@ -656,13 +829,13 @@ main_menu() {
         echo -e "${B}╔══════════════════════════════════════════════╗${NC}"
         echo -e "${B}║${W}   RF4 SA  Backup & Migration Tool           ${B}║${NC}"
         echo -e "${B}╚══════════════════════════════════════════════╝${NC}"
-        echo -e "  ${D}RF4: nga.li/rf4de | Steam: nga.li/rf4steam | Download: nga.li/rf4dl${NC}"
-        echo -e "  ${D}Blog: nga.li/rf4backup | Forum: nga.li/rf4forum${NC}"
+        echo -e "  ${D}RF4: nga.li/rf4de | Steam: nga.li/rf4steam | Blog: nga.li/rf4b${NC}"
         echo
         echo -e "  ${Y}[1]${NC} ${W}Scan${NC}     – Alle Installationen anzeigen"
         echo -e "  ${Y}[2]${NC} ${W}Backup${NC}   – Daten sichern"
         echo -e "  ${Y}[3]${NC} ${W}Restore${NC}  – In Installation importieren"
-        echo -e "  ${Y}[4]${NC} ${W}Merge${NC}    – Zwei Installationen zusammenführen"
+        echo -e "  ${Y}[4]${NC} ${W}Merge${NC}    – Installationen zusammenführen"
+        echo -e "  ${Y}[5]${NC} ${W}Sync${NC}     – Mit Cloud/NAS synchronisieren"
         echo -e "  ${Y}[0]${NC} Beenden"
         echo
         read -r -p "  Wähle: " choice
@@ -671,6 +844,7 @@ main_menu() {
             2) do_backup ;;
             3) do_restore ;;
             4) do_merge ;;
+            5) do_sync ;;
             0) echo; exit 0 ;;
             *) ;;
         esac
@@ -683,5 +857,6 @@ case "${1:-}" in
     restore) do_restore ;;
     scan)    do_scan ;;
     merge)   do_merge ;;
+    sync)    do_sync ;;
     *)       main_menu ;;
 esac

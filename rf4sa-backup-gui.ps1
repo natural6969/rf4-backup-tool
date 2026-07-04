@@ -16,10 +16,14 @@
 .LINK
     https://nga.li/rf4b
 #>
-# Version 1.0.0 – 2026-07-03
+# Version 1.1.0 – 2026-07-04
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "SilentlyContinue"
+$SYNC_CONFIG_DIR = Join-Path $env:APPDATA "rf4-backup"
+$SYNC_CONFIG     = Join-Path $SYNC_CONFIG_DIR "sync.conf"
+function Get-SyncPath { if (Test-Path $SYNC_CONFIG) { return (Get-Content $SYNC_CONFIG -Raw -EA SilentlyContinue).Trim() }; return "" }
+function Set-SyncPath($p) { New-Item -ItemType Directory -Force -Path $SYNC_CONFIG_DIR | Out-Null; Set-Content $SYNC_CONFIG $p -Encoding UTF8 }
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -346,7 +350,8 @@ function Show-ActionPanel {
     $actions = @(
         @{ Key="backup";  Title="Backup erstellen";          Desc="RF4-Daten (Chats, Einstellungen, Screenshots) in einen Ordner deiner Wahl sichern." },
         @{ Key="restore"; Title="Backup wiederherstellen";   Desc="Gesicherte Daten in eine vorhandene RF4-Installation importieren." },
-        @{ Key="merge";   Title="Installationen zusammenführen"; Desc="Daten aus einer anderen Installation übertragen – fehlende Nachrichten werden ergänzt, nichts überschrieben." }
+        @{ Key="merge";   Title="Installationen zusammenführen"; Desc="Daten aus einer anderen Installation übertragen – fehlende Nachrichten werden ergänzt, nichts überschrieben." },
+        @{ Key="sync";    Title="Cloud / NAS Sync";          Desc="Mailboxen zwischen PC und Laptop/NAS synchronisieren – Nextcloud, Syncthing, Netzlaufwerk, USB oder jeder geteilte Ordner." }
     )
 
     $y = 50
@@ -407,9 +412,10 @@ function Show-ActionPanel {
     $btnNext.Add_Click({
         if (-not $state.Action) { [System.Windows.Forms.MessageBox]::Show("Bitte eine Aktion wählen.","RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return }
         switch ($state.Action) {
-            "backup"  { Show-SourcePanel "backup"  }
+            "backup"  { Show-SourcePanel "backup" }
             "restore" { Show-RestoreSourcePanel }
             "merge"   { Show-MergePanel }
+            "sync"    { Show-SyncPanel }
         }
     })
     $pContent.Controls.Add($btnNext)
@@ -764,6 +770,176 @@ function Show-MergePanel {
         Show-ResultPanel "Merge abgeschlossen" $log $dst
     })
     $pContent.Controls.Add($btnStart)
+}
+
+# ────────────────────────────────────────────────────────────────────
+# PANEL 3d: SYNC
+# ────────────────────────────────────────────────────────────────────
+function Show-SyncPanel {
+    $pContent.Controls.Clear()
+    Set-Step 2
+
+    $lbl = New-Label "Cloud / NAS Sync" 18 12 500 24 $FONT_BOLD $COL_TEXT
+    $pContent.Controls.Add($lbl)
+
+    $lblInfo = New-Label "Synchronisiert Mailboxen bidirektional zwischen diesem PC und dem Sync-Ordner." 18 38 700 18 $FONT_SMALL $COL_MUTED
+    $pContent.Controls.Add($lblInfo)
+
+    # Sync-Ordner Zeile
+    $lblDir = New-Label "Sync-Ordner:" 18 72 110 22 $FONT_MAIN $COL_MUTED
+    $pContent.Controls.Add($lblDir)
+
+    $txtSync = New-Object System.Windows.Forms.TextBox
+    $txtSync.Location = [System.Drawing.Point]::new(130,70)
+    $txtSync.Size = [System.Drawing.Size]::new(518,24)
+    $txtSync.BackColor = $COL_CARD; $txtSync.ForeColor = $COL_TEXT
+    $txtSync.BorderStyle = "None"; $txtSync.Font = $FONT_MAIN
+    $txtSync.Text = (Get-SyncPath)
+    $pContent.Controls.Add($txtSync)
+
+    $btnBrowse = New-Button "…" 656 68 60 26 $COL_BORDER $COL_TEXT
+    $btnBrowse.Add_Click({
+        $fb = New-Object System.Windows.Forms.FolderBrowserDialog
+        $fb.Description = "Sync-Ordner wählen (z.B. Nextcloud-Ordner oder NAS-Laufwerk)"
+        if ($txtSync.Text -and (Test-Path $txtSync.Text)) { $fb.SelectedPath = $txtSync.Text }
+        if ($fb.ShowDialog() -eq "OK") { $txtSync.Text = $fb.SelectedPath; Set-SyncPath $fb.SelectedPath; Update-SyncStatus }
+    })
+    $pContent.Controls.Add($btnBrowse)
+
+    # Hinweis-Text
+    $lblHint = New-Label "Nextcloud-Ordner  ·  NAS-Netzlaufwerk (N:\)  ·  Syncthing-Ordner  ·  USB-Stick" 130 96 550 18 (New-Object System.Drawing.Font("Segoe UI",7.5)) $COL_MUTED
+    $pContent.Controls.Add($lblHint)
+
+    # Installation wählen
+    $lblInst = New-Label "Installation:" 18 126 110 22 $FONT_MAIN $COL_MUTED
+    $pContent.Controls.Add($lblInst)
+
+    $existing = @($state.Installs | Where-Object { Test-Path $_.Path })
+    $lstInst = New-Object System.Windows.Forms.ComboBox
+    $lstInst.Location = [System.Drawing.Point]::new(130,124)
+    $lstInst.Size = [System.Drawing.Size]::new(586,24)
+    $lstInst.BackColor = $COL_CARD; $lstInst.ForeColor = $COL_TEXT
+    $lstInst.Font = $FONT_MAIN; $lstInst.FlatStyle = "Flat"; $lstInst.DropDownStyle = "DropDownList"
+    foreach ($i in $existing) { $lstInst.Items.Add($i.Label) | Out-Null }
+    if ($lstInst.Items.Count -gt 0) { $lstInst.SelectedIndex = 0 }
+    $pContent.Controls.Add($lstInst)
+
+    # Status-Box
+    $lblStatus = New-Label "Sync-Ordner Status:" 18 162 200 18 $FONT_SMALL $COL_MUTED
+    $pContent.Controls.Add($lblStatus)
+
+    $lstStatus = New-Object System.Windows.Forms.ListBox
+    $lstStatus.Location = [System.Drawing.Point]::new(18,182)
+    $lstStatus.Size = [System.Drawing.Size]::new(740,148)
+    $lstStatus.BackColor = $COL_CARD; $lstStatus.ForeColor = $COL_TEXT
+    $lstStatus.Font = $FONT_MONO; $lstStatus.BorderStyle = "None"; $lstStatus.SelectionMode = "None"
+    $pContent.Controls.Add($lstStatus)
+
+    function Update-SyncStatus {
+        $lstStatus.Items.Clear()
+        $p = $txtSync.Text.Trim()
+        if ([string]::IsNullOrWhiteSpace($p)) { $lstStatus.Items.Add("Kein Sync-Ordner angegeben."); return }
+        if (-not (Test-Path $p)) { $lstStatus.Items.Add("[!]  Ordner nicht erreichbar: $p"); return }
+        $syncDir = Join-Path $p "RF4_Sync"
+        if (-not (Test-Path $syncDir)) { $lstStatus.Items.Add("[OK] Ordner erreichbar. Noch kein RF4_Sync-Unterordner – wird beim ersten Sync angelegt."); return }
+        $mboxes = @(Get-ChildItem $syncDir -Directory -Filter "Mailbox_*" -EA SilentlyContinue)
+        if ($mboxes.Count -eq 0) {
+            $lstStatus.Items.Add("[OK] Sync-Ordner vorhanden. Noch keine Mailboxen gespeichert.")
+        } else {
+            foreach ($m in $mboxes) {
+                $cnt = (Get-ChildItem $m.FullName -Filter "*.dat" -EA SilentlyContinue).Count
+                $lstStatus.Items.Add("[OK] $($m.Name)  –  $cnt Konversationen")
+            }
+        }
+        foreach ($dat in @("Settings.dat","Preferences.dat","Crafting.dat")) {
+            $f = Join-Path $syncDir $dat
+            if (Test-Path $f) { $lstStatus.Items.Add("[OK] $dat  ($(((Get-Item $f).LastWriteTime).ToString('yyyy-MM-dd HH:mm')))") }
+        }
+        $logFile = Join-Path $syncDir ".sync_log"
+        if (Test-Path $logFile) {
+            $last = Get-Content $logFile | Select-Object -Last 1
+            if ($last) { $lstStatus.Items.Add("     Letzter Sync: $last") }
+        }
+    }
+
+    $txtSync.Add_TextChanged({ Update-SyncStatus })
+    Update-SyncStatus
+
+    $btnRefresh = New-Button "Status aktualisieren" 18 338 180 28 $COL_BORDER $COL_TEXT
+    $btnRefresh.Add_Click({ Update-SyncStatus })
+    $pContent.Controls.Add($btnRefresh)
+
+    $btnBack = New-Button "« Zurück" 18 390 120 34 $COL_BORDER $COL_TEXT
+    $btnBack.Add_Click({ Show-ActionPanel })
+    $pContent.Controls.Add($btnBack)
+
+    $btnSync = New-Button "Sync starten" 570 390 170 34 $COL_GREEN $COL_BG
+    $btnSync.Add_Click({
+        $syncPath = $txtSync.Text.Trim()
+        if ([string]::IsNullOrWhiteSpace($syncPath)) {
+            [System.Windows.Forms.MessageBox]::Show("Bitte Sync-Ordner angeben.","RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return
+        }
+        if (-not (Test-Path $syncPath)) {
+            [System.Windows.Forms.MessageBox]::Show("Sync-Ordner nicht erreichbar:`n$syncPath`n`nNAS eingebunden? Cloud-Sync aktiv?","RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return
+        }
+        if ($lstInst.SelectedIndex -lt 0) {
+            [System.Windows.Forms.MessageBox]::Show("Bitte Installation auswählen.","RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return
+        }
+        Set-SyncPath $syncPath
+        $instPath = $existing[$lstInst.SelectedIndex].Path
+        Do-SyncRunGUI -InstPath $instPath -SyncBase $syncPath
+    })
+    $pContent.Controls.Add($btnSync)
+}
+
+function Do-SyncRunGUI {
+    param([string]$InstPath, [string]$SyncBase)
+    Show-ProgressPanel "Sync läuft…"
+    $syncDir = Join-Path $SyncBase "RF4_Sync"
+    New-Item -ItemType Directory -Force -Path $syncDir | Out-Null
+    $log = "Lokal:  $InstPath`nSync:   $syncDir`n`n"
+
+    # Phase 1: Lokal → Sync
+    $log += "=== Phase 1: Lokal -> Sync (hochladen) ===`n"
+    $localMboxes = @(Get-ChildItem $InstPath -Directory -Filter "Mailbox_*" -EA SilentlyContinue)
+    if ($localMboxes.Count -gt 0) {
+        foreach ($mbox in $localMboxes) {
+            $log += "Up $($mbox.Name)...`n"
+            Merge-Mailbox $mbox.FullName (Join-Path $syncDir $mbox.Name) ([ref]$log)
+        }
+    } else { $log += "[!] Keine lokalen Mailboxen – nur Pull.`n" }
+
+    # Phase 2: Sync → Lokal
+    $log += "`n=== Phase 2: Sync -> Lokal (herunterladen) ===`n"
+    $syncMboxes = @(Get-ChildItem $syncDir -Directory -Filter "Mailbox_*" -EA SilentlyContinue)
+    if ($syncMboxes.Count -gt 0) {
+        foreach ($mbox in $syncMboxes) {
+            $log += "Down $($mbox.Name)...`n"
+            Merge-Mailbox $mbox.FullName (Join-Path $InstPath $mbox.Name) ([ref]$log)
+        }
+    } else { $log += "[!] Noch keine Mailboxen von anderen Geräten im Sync-Ordner.`n" }
+
+    # Settings: neuere Version gewinnt
+    $log += "`n=== Einstellungen (neuere Version gewinnt) ===`n"
+    foreach ($dat in @("Settings.dat","Preferences.dat","Crafting.dat")) {
+        $lf = Join-Path $InstPath $dat; $sf = Join-Path $syncDir $dat
+        $hasL = Test-Path $lf; $hasS = Test-Path $sf
+        if ($hasL -and -not $hasS) {
+            Copy-Item $lf $sf; $log += "[OK] $dat -> Sync (neu hochgeladen)`n"
+        } elseif (-not $hasL -and $hasS) {
+            Copy-Item $sf $lf; $log += "[OK] $dat <- Sync (neu heruntergeladen)`n"
+        } elseif ($hasL -and $hasS) {
+            $lt = (Get-Item $lf).LastWriteTimeUtc; $st = (Get-Item $sf).LastWriteTimeUtc
+            if    ($lt -gt $st) { Copy-Item $lf $sf -Force; $log += "[OK] $dat -> Sync (lokal neuer)`n" }
+            elseif ($st -gt $lt){ Copy-Item $sf $lf -Force; $log += "[OK] $dat <- Sync (Sync neuer)`n" }
+            else                 { $log += "     $dat: identisch, übersprungen`n" }
+        }
+    }
+
+    $logLine = "$(([DateTime]::UtcNow).ToString('yyyy-MM-ddTHH:mm:ssZ')) $env:COMPUTERNAME"
+    Add-Content (Join-Path $syncDir ".sync_log") $logLine -Encoding UTF8
+
+    Show-ResultPanel "Sync abgeschlossen" $log $syncDir
 }
 
 # ────────────────────────────────────────────────────────────────────

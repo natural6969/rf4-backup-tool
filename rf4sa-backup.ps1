@@ -18,8 +18,10 @@
 .LINK
     https://nga.li/rf4backup
 #>
-# Version 1.1.0 – 2026-06-23
+# Version 1.2.0 – 2026-07-04
 # Changelog:
+#   1.2.0  Cloud/NAS-Sync (bidirektional, ordnerbasiert)
+#   1.1.1  Header-Links aktualisiert (nga.li/rf4b + Codeberg)
 #   1.1.0  Standalone-Labels, Account-IDs im Scan, Per-Account Backup/Restore,
 #          Multi-Quellen Merge, nga.li-Links, Laufwerksbuchstabe im Scan
 #   1.0.0  Erstveröffentlichung
@@ -28,6 +30,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ── Konfiguration ──────────────────────────────────────────────────────────────
+$SYNC_CONFIG_DIR = Join-Path $env:APPDATA "rf4-backup"
+$SYNC_CONFIG     = Join-Path $SYNC_CONFIG_DIR "sync.conf"
+
 $RF4_VARIANTS = @(
     @{ Folder = "RussianFishing4DE";      Label = "RF4 Standalone Deutsch";       Steam = $false },
     @{ Folder = "RussianFishing4DE_new";  Label = "RF4 Standalone Deutsch (neu)"; Steam = $false },
@@ -512,20 +517,184 @@ function Do-Merge {
     Pause-Menu
 }
 
+# ── SYNC ─────────────────────────────────────────────────────────────────────
+function Get-SyncPath {
+    if (Test-Path $SYNC_CONFIG) { return (Get-Content $SYNC_CONFIG -Raw -EA SilentlyContinue).Trim() }
+    return ""
+}
+function Set-SyncPath($p) {
+    New-Item -ItemType Directory -Force -Path $SYNC_CONFIG_DIR | Out-Null
+    Set-Content $SYNC_CONFIG $p -Encoding UTF8
+}
+
+function Do-SyncRun {
+    param([string]$InstPath, [string]$SyncBase)
+    $syncDir = Join-Path $SyncBase "RF4_Sync"
+    New-Item -ItemType Directory -Force -Path $syncDir | Out-Null
+
+    Write-Host ""
+    Write-Info "Lokal:  $InstPath"
+    Write-Info "Sync:   $syncDir"
+    Write-Sep
+
+    # Phase 1: Lokal → Sync
+    Write-Host "`n  Phase 1: Lokal -> Sync (neue Nachrichten hochladen)" -ForegroundColor White
+    $localMboxes = @(Get-ChildItem $InstPath -Directory -Filter "Mailbox_*" -EA SilentlyContinue)
+    if ($localMboxes.Count -gt 0) {
+        foreach ($mbox in $localMboxes) {
+            Write-Info "  Up $($mbox.Name)"
+            Merge-Mailbox $mbox.FullName (Join-Path $syncDir $mbox.Name)
+        }
+    } else { Write-Warn "Keine lokalen Mailboxen – nur Pull wird ausgeführt." }
+
+    # Phase 2: Sync → Lokal
+    Write-Host "`n  Phase 2: Sync -> Lokal (neue Nachrichten herunterladen)" -ForegroundColor White
+    $syncMboxes = @(Get-ChildItem $syncDir -Directory -Filter "Mailbox_*" -EA SilentlyContinue)
+    if ($syncMboxes.Count -gt 0) {
+        foreach ($mbox in $syncMboxes) {
+            Write-Info "  Down $($mbox.Name)"
+            Merge-Mailbox $mbox.FullName (Join-Path $InstPath $mbox.Name)
+        }
+    } else { Write-Warn "Sync-Ordner enthält noch keine Mailboxen von anderen Geräten." }
+
+    # Settings: neuere Version gewinnt
+    Write-Host "`n  Einstellungen (neuere Version gewinnt)" -ForegroundColor White
+    foreach ($dat in @("Settings.dat","Preferences.dat","Crafting.dat")) {
+        $lf = Join-Path $InstPath $dat; $sf = Join-Path $syncDir $dat
+        $hasL = Test-Path $lf; $hasS = Test-Path $sf
+        if ($hasL -and -not $hasS) {
+            Copy-Item $lf $sf; Write-Ok "$dat -> Sync (neu hochgeladen)"
+        } elseif (-not $hasL -and $hasS) {
+            Copy-Item $sf $lf; Write-Ok "$dat <- Sync (neu heruntergeladen)"
+        } elseif ($hasL -and $hasS) {
+            $lt = (Get-Item $lf).LastWriteTimeUtc
+            $st = (Get-Item $sf).LastWriteTimeUtc
+            if    ($lt -gt $st) { Copy-Item $lf $sf -Force; Write-Ok "$dat -> Sync (lokal neuer)" }
+            elseif ($st -gt $lt){ Copy-Item $sf $lf -Force; Write-Ok "$dat <- Sync (Sync neuer)" }
+            else                 { Write-Info "$dat: identisch, übersprungen" }
+        }
+    }
+
+    $logLine = "$(([DateTime]::UtcNow).ToString('yyyy-MM-ddTHH:mm:ssZ')) $env:COMPUTERNAME"
+    Add-Content (Join-Path $syncDir ".sync_log") $logLine -Encoding UTF8
+
+    Write-Host ""; Write-Ok "Sync abgeschlossen!"
+    Write-Info "Sync-Ordner: $syncDir"
+}
+
+function Do-Sync {
+    Write-Hdr "CLOUD / NAS SYNC"
+    Write-Host "  Ordnerbasierter Sync – funktioniert mit:" -ForegroundColor DarkGray
+    Write-Host "  Nextcloud  *  NAS-Laufwerk  *  Syncthing  *  USB  *  OneDrive" -ForegroundColor DarkGray
+
+    while ($true) {
+        $syncPath = Get-SyncPath
+        Write-Host ""
+        if ([string]::IsNullOrWhiteSpace($syncPath)) {
+            Write-Host "  Kein Sync-Ordner konfiguriert." -ForegroundColor Yellow
+        } elseif (Test-Path $syncPath) {
+            Write-Ok "Sync-Ordner: $syncPath"
+        } else {
+            Write-Warn "Sync-Ordner nicht erreichbar: $syncPath"
+            Write-Host "  (NAS eingebunden? Cloud-Sync aktiv?)" -ForegroundColor DarkGray
+        }
+
+        Write-Host ""
+        Write-Host "  [1] Sync jetzt ausführen (bidirektional)" -ForegroundColor Yellow
+        Write-Host "  [2] Sync-Ordner konfigurieren"           -ForegroundColor Yellow
+        Write-Host "  [3] Sync-Status anzeigen"                -ForegroundColor Yellow
+        Write-Host "  [0] Zurück"                              -ForegroundColor Yellow
+        Write-Host ""
+        $raw = Read-Host "  Wähle"
+
+        switch ($raw) {
+            "0" { return }
+            "2" {
+                Write-Host ""
+                Write-Host "  Sync-Ordner eingeben:" -ForegroundColor White
+                Write-Host "  Beispiele:" -ForegroundColor DarkGray
+                Write-Host "    C:\Users\$env:USERNAME\Nextcloud\RF4-Sync" -ForegroundColor DarkGray
+                Write-Host "    N:\RF4-Sync   (NAS als Netzlaufwerk N:)" -ForegroundColor DarkGray
+                Write-Host "    D:\RF4-Sync   (USB-Stick)" -ForegroundColor DarkGray
+                Write-Host ""
+                $newPath = Read-Host "  Pfad"
+                if (-not [string]::IsNullOrWhiteSpace($newPath)) {
+                    try {
+                        New-Item -ItemType Directory -Force -Path $newPath | Out-Null
+                        Set-SyncPath $newPath
+                        Write-Ok "Gespeichert: $newPath"
+                    } catch { Write-Err "Ordner konnte nicht erstellt werden: $_" }
+                }
+                Pause-Menu
+            }
+            "3" {
+                $syncPath = Get-SyncPath
+                if ([string]::IsNullOrWhiteSpace($syncPath)) { Write-Warn "Kein Sync-Ordner konfiguriert."; Pause-Menu; continue }
+                if (-not (Test-Path $syncPath)) { Write-Err "Nicht erreichbar: $syncPath"; Pause-Menu; continue }
+                $syncDir = Join-Path $syncPath "RF4_Sync"
+                Write-Info "Sync-Ordner: $syncPath"
+                if (Test-Path $syncDir) {
+                    $mboxes = @(Get-ChildItem $syncDir -Directory -Filter "Mailbox_*" -EA SilentlyContinue)
+                    if ($mboxes.Count -gt 0) {
+                        foreach ($m in $mboxes) {
+                            $cnt = (Get-ChildItem $m.FullName -Filter "*.dat" -EA SilentlyContinue).Count
+                            Write-Info "  $($m.Name): $cnt Konversationen"
+                        }
+                    } else { Write-Warn "  Noch keine Mailboxen im Sync-Ordner." }
+                    foreach ($dat in @("Settings.dat","Preferences.dat","Crafting.dat")) {
+                        $f = Join-Path $syncDir $dat
+                        if (Test-Path $f) { Write-Info "  $dat: $(((Get-Item $f).LastWriteTime).ToString('yyyy-MM-dd HH:mm'))" }
+                    }
+                    $logFile = Join-Path $syncDir ".sync_log"
+                    if (Test-Path $logFile) {
+                        Write-Host ""; Write-Info "Letzte Sync-Einträge:"
+                        Get-Content $logFile | Select-Object -Last 5 | ForEach-Object { Write-Info "  $_" }
+                    }
+                } else { Write-Warn "Noch kein RF4_Sync-Unterordner. Ersten Sync ausführen." }
+                Pause-Menu
+            }
+            "1" {
+                $syncPath = Get-SyncPath
+                if ([string]::IsNullOrWhiteSpace($syncPath)) {
+                    Write-Warn "Bitte zuerst Sync-Ordner konfigurieren (Option 2)."; Pause-Menu; continue
+                }
+                if (-not (Test-Path $syncPath)) {
+                    Write-Err "Sync-Ordner nicht erreichbar: $syncPath"
+                    Write-Info "NAS eingebunden? Cloud-Sync aktiv? USB angesteckt?"; Pause-Menu; continue
+                }
+                $installs = Find-Installations
+                $existing = @($installs | Where-Object { Test-Path $_.Path })
+                if ($existing.Count -eq 0) { Write-Err "Keine RF4-Installationen gefunden."; Pause-Menu; continue }
+                $instPath = ""
+                if ($existing.Count -eq 1) {
+                    $instPath = $existing[0].Path
+                    Write-Info "Installation: $($existing[0].Label)"
+                } else {
+                    $choice = Show-Menu "Welche Installation synchronisieren?" ($existing | ForEach-Object { $_.Label })
+                    if ($choice -eq 0) { continue }
+                    $instPath = $existing[$choice - 1].Path
+                }
+                Do-SyncRun -InstPath $instPath -SyncBase $syncPath
+                Pause-Menu
+            }
+        }
+    }
+}
+
 # ── Hauptmenü ─────────────────────────────────────────────────────────────────
 while ($true) {
     Clear-Host
     Write-Host "╔══════════════════════════════════════════════╗" -ForegroundColor Blue
     Write-Host "║   RF4 Standalone  Backup & Migration         ║" -ForegroundColor Blue
     Write-Host "╚══════════════════════════════════════════════╝" -ForegroundColor Blue
-    Write-Host "  RF4: nga.li/rf4de | Steam: nga.li/rf4steam | Download: nga.li/rf4dl" -ForegroundColor DarkGray
-    Write-Host "  Blog: nga.li/rf4backup | Forum: nga.li/rf4forum" -ForegroundColor DarkGray
+    Write-Host "  RF4: nga.li/rf4de | Steam: nga.li/rf4steam | Blog: nga.li/rf4b" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  [1] Scan     – Alle Installationen anzeigen" -ForegroundColor Yellow
-    Write-Host "  [2] Backup   – Daten sichern"                -ForegroundColor Yellow
-    Write-Host "  [3] Restore  – In Installation importieren"  -ForegroundColor Yellow
-    Write-Host "  [4] Merge    – Installationen zusammenführen" -ForegroundColor Yellow
-    Write-Host "  [0] Beenden"                                  -ForegroundColor Yellow
+    Write-Host "  [1] Scan     – Alle Installationen anzeigen"     -ForegroundColor Yellow
+    Write-Host "  [2] Backup   – Daten sichern"                    -ForegroundColor Yellow
+    Write-Host "  [3] Restore  – In Installation importieren"      -ForegroundColor Yellow
+    Write-Host "  [4] Merge    – Installationen zusammenführen"    -ForegroundColor Yellow
+    Write-Host "  [5] Sync     – Mit Cloud/NAS synchronisieren"    -ForegroundColor Yellow
+    Write-Host "  [0] Beenden"                                     -ForegroundColor Yellow
     Write-Host ""
     $choice = Read-Host "  Wähle"
     switch ($choice) {
@@ -533,6 +702,7 @@ while ($true) {
         "2" { Do-Backup  }
         "3" { Do-Restore }
         "4" { Do-Merge   }
+        "5" { Do-Sync    }
         "0" { exit 0 }
     }
 }
