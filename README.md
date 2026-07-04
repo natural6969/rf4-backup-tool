@@ -10,11 +10,23 @@ Für Windows (PowerShell, mit GUI) und Linux (Bash).
 
 ---
 
-## Dateien
+## Installer (Windows)
+
+| Datei | Beschreibung |
+|---|---|
+| `rf4sa-backup-gui-setup-v1.2.0.exe` | GUI-Version — empfohlen für Einsteiger |
+| `rf4sa-backup-cli-setup-v1.2.0.exe` | CLI-Version (Terminal) |
+| `rf4sa-backup-full-setup-v1.2.0.exe` | GUI + CLI zusammen |
+
+→ Download unter [Releases](../../releases)
+
+---
+
+## Dateien (ohne Installer)
 
 | Datei | Plattform | Beschreibung |
 |---|---|---|
-| `rf4sa-backup-gui.ps1` | Windows 10/11 | Grafische Oberfläche — für Einsteiger empfohlen |
+| `rf4sa-backup-gui.ps1` | Windows 10/11 | Grafische Oberfläche — direkt ausführbar, kein Installer nötig |
 | `rf4sa-backup.ps1` | Windows 7/10/11 | Terminal-Version (Textmenü) |
 | `rf4sa-backup.sh` | Linux, macOS | Bash-Script — Wine & Proton automatisch erkannt |
 
@@ -43,13 +55,17 @@ Spielstand, Inventar und Angelausrüstung liegen auf den RF4-Servern und sind be
 
 ## Benutzung
 
-### Windows — GUI (empfohlen)
+### Windows — Installer (empfohlen)
+
+`rf4sa-backup-gui-setup-v1.2.0.exe` herunterladen und ausführen. Installiert das Tool systemweit.
+
+### Windows — GUI (ohne Installer)
 
 ```
 Rechtsklick auf rf4sa-backup-gui.ps1 → "Mit PowerShell ausführen"
 ```
 
-Das Fenster öffnet sich direkt. Kein Installer, kein Setup.
+Das Fenster öffnet sich direkt.
 
 ### Windows — Terminal
 
