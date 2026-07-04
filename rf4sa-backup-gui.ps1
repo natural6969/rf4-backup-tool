@@ -9,11 +9,12 @@
 .NOTES
     Ausführen: Rechtsklick → "Mit PowerShell ausführen"
     Oder: powershell -ExecutionPolicy Bypass -File rf4sa-backup-gui.ps1
-    Blog/Infos:    https://nga.li/rf4backup
+    Blog/Infos:    https://nga.li/rf4b
+    Quellcode:     https://nga.li/rf4git  (Codeberg)
     Download:      https://nga.li/rf4dl
     SHA256 verify: Get-FileHash rf4sa-backup-gui.ps1
 .LINK
-    https://nga.li/rf4backup
+    https://nga.li/rf4b
 #>
 # Version 1.0.0 – 2026-07-03
 

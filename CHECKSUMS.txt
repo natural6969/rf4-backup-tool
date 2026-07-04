@@ -1,27 +1,27 @@
 # RF4 Backup Tool — Prüfsummen / Checksums
-# Version 1.1.0 — 2026-07-04
+# Version 1.1.1 — 2026-07-04
 #
 # Verifizieren:
 #   Windows: Get-FileHash <datei> -Algorithm SHA256
 #   Linux:   sha256sum <datei>   /   sha1sum <datei>   /   md5sum <datei>
 
 # ── rf4sa-backup-gui.ps1 (Windows GUI) ────────────────────────────────────────
-MD5     d1b0d3603fc4653f861066c25b463cd4  rf4sa-backup-gui.ps1
-SHA1    c142ca0d62f128599d684710d8abe0356dda3bd4  rf4sa-backup-gui.ps1
-SHA256  211f3bad44a1983417445f479210cf6c266fefb6c26a1074e0b46c658946c36b  rf4sa-backup-gui.ps1
-SHA512  a70c2a8f136bd29260957006f5ad9e1a43e9e01e517aa5a45c5cf59d34a18ebd\
-        03e4f5860a8dd5e09821066268386f40eb598785c5b094e2aa008bafb8ea5361  rf4sa-backup-gui.ps1
+MD5     6062abd86201b8158fa908c1dae5ec64  rf4sa-backup-gui.ps1
+SHA1    b6507f83a3edd192ef4c1cfce69cfdd7d2e88859  rf4sa-backup-gui.ps1
+SHA256  8d4b68e6ab49f1fa20a3d06f02440ae14b6f9c74906f40ad32052efe7b794a22  rf4sa-backup-gui.ps1
+SHA512  c4bf9de462d9a0248e9c98f840c9c707444eceb911d238e0f8134ee8f7f078bd\
+        898243bfd7a7661ee33f9fe1c263eb3c6d4eaa3a7fe16bc259b487c618ee84b3  rf4sa-backup-gui.ps1
 
 # ── rf4sa-backup.ps1 (Windows Terminal) ───────────────────────────────────────
-MD5     d2fa6b73613eab478f94fdac158cb80d  rf4sa-backup.ps1
-SHA1    379329acef88e956f17697451ad90070c7c25897  rf4sa-backup.ps1
-SHA256  69ec455a8d214bc34cf46820707e401cdaf187e85ef0515749afe37d50553aa2  rf4sa-backup.ps1
-SHA512  b885389021be72f43f7f470ed0b21965d8259a30b311059e050c63f883dd30a3\
-        bdef55c5adf817d66a510e62e660a7606bcdba30c407b19cc6b7ffadc2fc822a  rf4sa-backup.ps1
+MD5     78134e0823909f98a5991829ce78ba9b  rf4sa-backup.ps1
+SHA1    cbcf9e0a18aa52215fbac36f81e3cda081370ee9  rf4sa-backup.ps1
+SHA256  69c06f6afda8cfb02838e8b9668f06edcf9d7f4632fcd8ccffb58d13b86c0879  rf4sa-backup.ps1
+SHA512  ee5375ba758c611398b6d817cf1435c3463df839aeca98a2aa407f811448e1ee\
+        3012f7a327d2323f449b5e58ceb5d22182d02e738f205eee3dc5672052eb1bee  rf4sa-backup.ps1
 
 # ── rf4sa-backup.sh (Linux / Bash) ────────────────────────────────────────────
-MD5     6399384c6e17c6bab00295aed418c260  rf4sa-backup.sh
-SHA1    e5c4aed05928a716f80e08611fa63c37f0758d5f  rf4sa-backup.sh
-SHA256  b87412689d238e8eb1b7a2f8f7fbf97c4ab2157e8af048aca132b226238acc81  rf4sa-backup.sh
-SHA512  df2446030d00caa0767cd0e2c33fc9864e66d262964bcec7a979ea81b1725c88\
-        6e33da1e95d43494f354a2714d404926f2cb64f1730bde193ed3d1c03feb1ae8  rf4sa-backup.sh
+MD5     51dae6be44432bf214d3aad752a50d8a  rf4sa-backup.sh
+SHA1    293b069b8612ad51d1835293def0ba38889fe6f3  rf4sa-backup.sh
+SHA256  44023d9341f78279c6f6963bd2309c4e6aab874b41d6d4e077874525e228a615  rf4sa-backup.sh
+SHA512  8105140a0dfbfe06f5ba414ad70a611636b7c2f1dbf1547ef8f0c0b738eb01e5\
+        80678f94188883987297cf36fc5508152b2a59ff57b231a30a8010ca44d10f7d  rf4sa-backup.sh

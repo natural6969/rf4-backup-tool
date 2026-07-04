@@ -9,10 +9,11 @@
 .NOTES
     Ausführen: Rechtsklick → "Mit PowerShell ausführen"
     Oder: powershell -ExecutionPolicy Bypass -File rf4sa-backup.ps1
-    Blog/Infos:    https://nga.li/rf4backup
+    Blog/Infos:    https://nga.li/rf4b
+    Quellcode:     https://nga.li/rf4git  (Codeberg)
     RF4 Offiziell: https://nga.li/rf4de  (DE) | https://nga.li/rf4en  (EN)
     Steam:         https://nga.li/rf4steam
-    Download SA:   https://nga.li/rf4dl
+    Download:      https://nga.li/rf4dl
     Transfer-Info: https://nga.li/rf4transfer  (nur Steam → Standalone)
 .LINK
     https://nga.li/rf4backup
