@@ -8,7 +8,7 @@
 # Steam:         https://nga.li/rf4steam
 # Download:      https://nga.li/rf4dl
 # Transfer-Info: https://nga.li/rf4transfer  (nur Steam → Standalone)
-# Spenden/Donate: https://paypal.me/NaturalGaming
+# Spenden/Donate: https://paypal.me/bjoernoppermann
 #
 # Version 1.3.0 – 2026-07-04
 # Changelog:
@@ -897,7 +897,7 @@ main_menu() {
         echo -e "${B}╔══════════════════════════════════════════════╗${NC}"
         echo -e "${B}║${W}   RF4 SA  Backup & Migration Tool  v1.3    ${B}║${NC}"
         echo -e "${B}╚══════════════════════════════════════════════╝${NC}"
-        echo -e "  ${D}RF4: nga.li/rf4de | Blog: nga.li/rf4b | Donate: paypal.me/NaturalGaming${NC}"
+        echo -e "  ${D}RF4: nga.li/rf4de | Blog: nga.li/rf4b | Donate: paypal.me/bjoernoppermann${NC}"
         echo
         echo -e "  ${Y}[1]${NC} $(t MENU_SCAN)"
         echo -e "  ${Y}[2]${NC} $(t MENU_BACKUP)"

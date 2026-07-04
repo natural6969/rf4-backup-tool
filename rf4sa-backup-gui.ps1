@@ -13,7 +13,7 @@
     Quellcode:     https://nga.li/rf4git  (Codeberg)
     Download:      https://nga.li/rf4dl
     SHA256 verify: Get-FileHash rf4sa-backup-gui.ps1
-    Spenden/Donate: https://paypal.me/NaturalGaming
+    Spenden/Donate: https://paypal.me/bjoernoppermann
 .LINK
     https://nga.li/rf4b
 #>
@@ -42,7 +42,7 @@ $GUI_STRINGS = @{
     'BTN_START'             = @{ de='Starten »';   en='Start »';   ru='Старт »';    zh='开始 »' }
     'SELECT_ACTION'         = @{ de='Bitte eine Aktion wählen.'; en='Please select an action.'; ru='Пожалуйста, выберите действие.'; zh='请选择一个操作。' }
     'SELECT_SOURCE'         = @{ de='Bitte eine Quelle wählen.'; en='Please select a source.'; ru='Пожалуйста, выберите источник.'; zh='请选择来源。' }
-    'DONATE_TEXT'           = @{ de='Spenden: paypal.me/NaturalGaming'; en='Donate: paypal.me/NaturalGaming'; ru='Поддержать: paypal.me/NaturalGaming'; zh='捐赠: paypal.me/NaturalGaming' }
+    'DONATE_TEXT'           = @{ de='Spenden: paypal.me/bjoernoppermann'; en='Donate: paypal.me/bjoernoppermann'; ru='Поддержать: paypal.me/bjoernoppermann'; zh='捐赠: paypal.me/bjoernoppermann' }
 }
 function TG($key) {
     if ($GUI_STRINGS.ContainsKey($key) -and $GUI_STRINGS[$key].ContainsKey($LANG_CODE)) { return $GUI_STRINGS[$key][$LANG_CODE] }

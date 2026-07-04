@@ -15,7 +15,7 @@
     Steam:         https://nga.li/rf4steam
     Download:      https://nga.li/rf4dl
     Transfer-Info: https://nga.li/rf4transfer  (nur Steam → Standalone)
-    Spenden/Donate: https://paypal.me/NaturalGaming
+    Spenden/Donate: https://paypal.me/bjoernoppermann
 .LINK
     https://nga.li/rf4backup
 #>
@@ -714,7 +714,7 @@ while ($true) {
     Write-Host "╔══════════════════════════════════════════════╗" -ForegroundColor Blue
     Write-Host "║   RF4 Standalone  Backup & Migration  v1.2  ║" -ForegroundColor Blue
     Write-Host "╚══════════════════════════════════════════════╝" -ForegroundColor Blue
-    Write-Host "  RF4: nga.li/rf4de | Blog: nga.li/rf4b | Donate: paypal.me/NaturalGaming" -ForegroundColor DarkGray
+    Write-Host "  RF4: nga.li/rf4de | Blog: nga.li/rf4b | Donate: paypal.me/bjoernoppermann" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  [1] $(T 'MENU_SCAN')"    -ForegroundColor Yellow
     Write-Host "  [2] $(T 'MENU_BACKUP')"  -ForegroundColor Yellow

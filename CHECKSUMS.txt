@@ -1,32 +1,3 @@
-# RF4 Backup Tool — Prüfsummen / Checksums
-# Version 1.3.0 — 2026-07-04
-#
-# Verifizieren:
-#   Windows: Get-FileHash <datei> -Algorithm SHA256
-#   Linux:   sha256sum <datei>   /   sha1sum <datei>   /   md5sum <datei>
-
-# ── rf4sa-backup-gui.ps1 (Windows GUI) ────────────────────────────────────────
-MD5     d14b9c3d89caa69ecea9b146c29c13b1  rf4sa-backup-gui.ps1
-SHA1    f966ae615361c8b8bf7e4ef5ad0de780b1252767  rf4sa-backup-gui.ps1
-SHA256  c4175e31fd82b041e2f2669c5a99ca664296ff49be5b4e75dd941c3ce83c753c  rf4sa-backup-gui.ps1
-SHA512  a335bb5e28715c2eade2e6a7e2a44ae854a51c3600d85663a16ec7919b2f4672\
-        e0587e1250b8141af79a8edc8c842ad1c0bff7ee007f92a469b9788688fcdd10  rf4sa-backup-gui.ps1
-
-# ── rf4sa-backup.ps1 (Windows Terminal) ───────────────────────────────────────
-MD5     db2407748e8f21029432681d38492b2d  rf4sa-backup.ps1
-SHA1    6a76138b995aa6ed4cba22bd8b30e659fea8d488  rf4sa-backup.ps1
-SHA256  655cf12ab02edeadcc6bd1c83dd7b9bb20d0b415dacebcf4630e09dff8b340ba  rf4sa-backup.ps1
-SHA512  7d77b535f2602100270ca8febda3c611463a776b8d8ef6dda613ac2f641d3f83\
-        014145bfca6930549cdcd9110f768c622720607f0cc919f617c7bc6d19793633  rf4sa-backup.ps1
-
-# ── rf4sa-backup.sh (Linux / Bash) ────────────────────────────────────────────
-MD5     7a47f675a3e5df27a1afc684511d6040  rf4sa-backup.sh
-SHA1    9e38996bcedc532087f6fd4823861145d245986d  rf4sa-backup.sh
-SHA256  631f728398338e66eabd8557b9eba23d69074d89365878b8e9c773fa625db447  rf4sa-backup.sh
-SHA512  a14608fb081f4683d9794d9512570b94e1f8f46485d7c276c7e7bfe480f979d\
-        f1bd93d5dde84c89990c420cecf48c7c6a32dfe1fdf26f6476f46fe56fcd5fdef  rf4sa-backup.sh
-
-# ── Installer / Setup-EXE (Windows) ───────────────────────────────────────────
-# rf4sa-backup-gui-setup-v1.2.0.exe   — Installer nur GUI-Version
-# rf4sa-backup-cli-setup-v1.2.0.exe   — Installer nur Terminal-Version
-# rf4sa-backup-full-setup-v1.2.0.exe  — Installer alle Varianten (Full Package)
+ae532a7cf70e39e8192125465a87a1db54894e07d00f93127af42609f83af6ec  rf4sa-backup-gui.ps1
+b9ec5a88c8ac5ba6500cd89c19e31a34a175a9283887ac83afad743167448380  rf4sa-backup.ps1
+17a62a153ea4d8f31ff67a8c5c074266e8e67a3cb4830875e5badbbe818c2145  rf4sa-backup.sh
