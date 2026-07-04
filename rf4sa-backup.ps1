@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     RF4 Standalone Backup & Migration Tool (Windows PowerShell)
@@ -15,11 +15,13 @@
     Steam:         https://nga.li/rf4steam
     Download:      https://nga.li/rf4dl
     Transfer-Info: https://nga.li/rf4transfer  (nur Steam → Standalone)
+    Spenden/Donate: https://paypal.me/NaturalGaming
 .LINK
     https://nga.li/rf4backup
 #>
-# Version 1.2.0 – 2026-07-04
+# Version 1.3.0 – 2026-07-04
 # Changelog:
+#   1.3.0  i18n: DE/EN/RU/ZH Sprachunterstützung; InnoSetup-Installer (.exe); Donation-Link
 #   1.2.0  Cloud/NAS-Sync (bidirektional, ordnerbasiert)
 #   1.1.1  Header-Links aktualisiert (nga.li/rf4b + Codeberg)
 #   1.1.0  Standalone-Labels, Account-IDs im Scan, Per-Account Backup/Restore,
@@ -28,6 +30,31 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# ── Sprache / Language ─────────────────────────────────────────────────────────
+$LANG_CODE = switch ((Get-Culture).TwoLetterISOLanguageName.ToLower()) {
+    'de' { 'de' }; 'ru' { 'ru' }; 'zh' { 'zh' }; default { 'en' }
+}
+if ($env:RF4_LANG) { $LANG_CODE = $env:RF4_LANG.ToLower().Substring(0,2) }
+
+$STRINGS = @{
+    'MENU_SCAN'    = @{ de='Scan     – Alle Installationen anzeigen'; en='Scan     – Show all installations';  ru='Сканировать  – показать установки';      zh='扫描 – 显示所有安装' }
+    'MENU_BACKUP'  = @{ de='Backup   – Daten sichern';               en='Backup   – Save data to folder';     ru='Резервная копия – сохранить данные';      zh='备份 – 保存数据' }
+    'MENU_RESTORE' = @{ de='Restore  – Aus Backup importieren';      en='Restore  – Import from backup';      ru='Восстановить – импорт из резервной копии'; zh='恢复 – 从备份导入' }
+    'MENU_MERGE'   = @{ de='Merge    – Installationen zusammenführen'; en='Merge  – Combine installations';   ru='Объединить установки';                    zh='合并安装' }
+    'MENU_SYNC'    = @{ de='Sync     – Mit Cloud/NAS synchronisieren'; en='Sync   – Synchronize Cloud/NAS';   ru='Синхронизировать с облаком/NAS';           zh='同步 – 云/NAS同步' }
+    'MENU_EXIT'    = @{ de='Beenden'; en='Exit'; ru='Выход'; zh='退出' }
+    'BACK'         = @{ de='Zurück';  en='Back'; ru='Назад'; zh='返回' }
+    'CHOOSE'       = @{ de='Wähle';   en='Choose'; ru='Выберите'; zh='选择' }
+    'CONTINUE'     = @{ de='[Enter] zum Fortfahren'; en='[Enter] to continue'; ru='[Enter] для продолжения'; zh='[Enter] 继续' }
+    'INVALID'      = @{ de='Ungültige Eingabe'; en='Invalid input'; ru='Неверный ввод'; zh='无效输入' }
+    'TOGGLE_HINT'  = @{ de='(Nummer ein/ausschalten, a=alle, n=keine, Enter=OK, 0=Zurück)'; en='(Toggle numbers, a=all, n=none, Enter=OK, 0=Back)'; ru='(Переключить номер, a=все, n=нет, Enter=ОК, 0=Назад)'; zh='(切换数字, a=全部, n=无, Enter=确定, 0=返回)' }
+}
+function T($key) {
+    if ($STRINGS.ContainsKey($key) -and $STRINGS[$key].ContainsKey($LANG_CODE)) { return $STRINGS[$key][$LANG_CODE] }
+    if ($STRINGS.ContainsKey($key)) { return $STRINGS[$key]['en'] }
+    return $key
+}
 
 # ── Konfiguration ──────────────────────────────────────────────────────────────
 $SYNC_CONFIG_DIR = Join-Path $env:APPDATA "rf4-backup"
@@ -57,7 +84,7 @@ function Write-Hdr($t)    {
 
 function Pause-Menu {
     Write-Host ""
-    Read-Host "  [Enter] zum Fortfahren" | Out-Null
+    Read-Host "  $(T 'CONTINUE')" | Out-Null
 }
 
 # ── Numerisches Menü ───────────────────────────────────────────────────────────
@@ -69,15 +96,15 @@ function Show-Menu {
     for ($i = 0; $i -lt $Options.Count; $i++) {
         Write-Host "  [$($i+1)] $($Options[$i])" -ForegroundColor Yellow
     }
-    Write-Host "  [0] Zurück" -ForegroundColor Yellow
+    Write-Host "  [0] $(T 'BACK')" -ForegroundColor Yellow
     Write-Host ""
     do {
-        $raw = Read-Host "  Wähle"
+        $raw = Read-Host "  $(T 'CHOOSE')"
         if ($raw -eq "0") { return 0 }
         if ($raw -match '^\d+$' -and [int]$raw -ge 1 -and [int]$raw -le $Options.Count) {
             return [int]$raw
         }
-        Write-Warn "Ungültige Eingabe."
+        Write-Warn (T 'INVALID')
     } while ($true)
 }
 
@@ -89,7 +116,7 @@ function Show-MultiSelect {
     while ($true) {
         Write-Host ""
         Write-Host "  $Title" -ForegroundColor White
-        Write-Host "  (Nummer ein/ausschalten, a=alle, n=keine, Enter=OK, 0=Zurück)" -ForegroundColor DarkGray
+        Write-Host "  $(T 'TOGGLE_HINT')" -ForegroundColor DarkGray
         Write-Sep
         for ($i = 0; $i -lt $Options.Count; $i++) {
             $mark = if ($chosen[$i]) { "[X]" } else { "[ ]" }
@@ -97,7 +124,7 @@ function Show-MultiSelect {
             Write-Host "  $mark $($i+1)) $($Options[$i])" -ForegroundColor $col
         }
         Write-Host ""
-        $raw = Read-Host "  Wähle"
+        $raw = Read-Host "  $(T 'CHOOSE')"
 
         if ($raw -eq "") {
             $sel = @()
@@ -571,7 +598,7 @@ function Do-SyncRun {
             $st = (Get-Item $sf).LastWriteTimeUtc
             if    ($lt -gt $st) { Copy-Item $lf $sf -Force; Write-Ok "$dat -> Sync (lokal neuer)" }
             elseif ($st -gt $lt){ Copy-Item $sf $lf -Force; Write-Ok "$dat <- Sync (Sync neuer)" }
-            else                 { Write-Info "$dat: identisch, übersprungen" }
+            else                 { Write-Info "${dat}: identisch, übersprungen" }
         }
     }
 
@@ -603,9 +630,9 @@ function Do-Sync {
         Write-Host "  [1] Sync jetzt ausführen (bidirektional)" -ForegroundColor Yellow
         Write-Host "  [2] Sync-Ordner konfigurieren"           -ForegroundColor Yellow
         Write-Host "  [3] Sync-Status anzeigen"                -ForegroundColor Yellow
-        Write-Host "  [0] Zurück"                              -ForegroundColor Yellow
+        Write-Host "  [0] $(T 'BACK')"                         -ForegroundColor Yellow
         Write-Host ""
-        $raw = Read-Host "  Wähle"
+        $raw = Read-Host "  $(T 'CHOOSE')"
 
         switch ($raw) {
             "0" { return }
@@ -643,7 +670,7 @@ function Do-Sync {
                     } else { Write-Warn "  Noch keine Mailboxen im Sync-Ordner." }
                     foreach ($dat in @("Settings.dat","Preferences.dat","Crafting.dat")) {
                         $f = Join-Path $syncDir $dat
-                        if (Test-Path $f) { Write-Info "  $dat: $(((Get-Item $f).LastWriteTime).ToString('yyyy-MM-dd HH:mm'))" }
+                        if (Test-Path $f) { Write-Info "  ${dat}: $(((Get-Item $f).LastWriteTime).ToString('yyyy-MM-dd HH:mm'))" }
                     }
                     $logFile = Join-Path $syncDir ".sync_log"
                     if (Test-Path $logFile) {
@@ -685,18 +712,18 @@ function Do-Sync {
 while ($true) {
     Clear-Host
     Write-Host "╔══════════════════════════════════════════════╗" -ForegroundColor Blue
-    Write-Host "║   RF4 Standalone  Backup & Migration         ║" -ForegroundColor Blue
+    Write-Host "║   RF4 Standalone  Backup & Migration  v1.2  ║" -ForegroundColor Blue
     Write-Host "╚══════════════════════════════════════════════╝" -ForegroundColor Blue
-    Write-Host "  RF4: nga.li/rf4de | Steam: nga.li/rf4steam | Blog: nga.li/rf4b" -ForegroundColor DarkGray
+    Write-Host "  RF4: nga.li/rf4de | Blog: nga.li/rf4b | Donate: paypal.me/NaturalGaming" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  [1] Scan     – Alle Installationen anzeigen"     -ForegroundColor Yellow
-    Write-Host "  [2] Backup   – Daten sichern"                    -ForegroundColor Yellow
-    Write-Host "  [3] Restore  – In Installation importieren"      -ForegroundColor Yellow
-    Write-Host "  [4] Merge    – Installationen zusammenführen"    -ForegroundColor Yellow
-    Write-Host "  [5] Sync     – Mit Cloud/NAS synchronisieren"    -ForegroundColor Yellow
-    Write-Host "  [0] Beenden"                                     -ForegroundColor Yellow
+    Write-Host "  [1] $(T 'MENU_SCAN')"    -ForegroundColor Yellow
+    Write-Host "  [2] $(T 'MENU_BACKUP')"  -ForegroundColor Yellow
+    Write-Host "  [3] $(T 'MENU_RESTORE')" -ForegroundColor Yellow
+    Write-Host "  [4] $(T 'MENU_MERGE')"   -ForegroundColor Yellow
+    Write-Host "  [5] $(T 'MENU_SYNC')"    -ForegroundColor Yellow
+    Write-Host "  [0] $(T 'MENU_EXIT')"    -ForegroundColor Yellow
     Write-Host ""
-    $choice = Read-Host "  Wähle"
+    $choice = Read-Host "  $(T 'CHOOSE')"
     switch ($choice) {
         "1" { Do-Scan    }
         "2" { Do-Backup  }

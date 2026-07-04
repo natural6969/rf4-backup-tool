@@ -8,9 +8,11 @@
 # Steam:         https://nga.li/rf4steam
 # Download:      https://nga.li/rf4dl
 # Transfer-Info: https://nga.li/rf4transfer  (nur Steam → Standalone)
+# Spenden/Donate: https://paypal.me/NaturalGaming
 #
-# Version 1.2.0 – 2026-07-04
+# Version 1.3.0 – 2026-07-04
 # Changelog:
+#   1.3.0  i18n: DE/EN/RU/ZH Sprachunterstützung; Donation-Link
 #   1.2.0  Cloud/NAS-Sync (bidirektional, ordnerbasiert: Nextcloud/NAS/USB/Syncthing)
 #   1.1.1  Header-Links aktualisiert (nga.li/rf4b + Codeberg)
 #   1.1.0  Standalone-Labels, Account-IDs im Scan, Per-Account Backup/Restore,
@@ -18,6 +20,72 @@
 #   1.0.0  Erstveröffentlichung
 
 set -uo pipefail
+
+# ── Sprache / Language ─────────────────────────────────────────────────────────
+case "${RF4_LANG:-${LANG:-de}}" in
+  ru*) LANG_CODE=ru ;;
+  zh*) LANG_CODE=zh ;;
+  de*) LANG_CODE=de ;;
+  *)   LANG_CODE=en ;;
+esac
+
+t() {
+  local key="$1"
+  case "$LANG_CODE" in
+    ru) case "$key" in
+      BACK)         echo "Назад" ;;
+      CHOOSE)       echo "Выберите" ;;
+      CONTINUE)     echo "[Enter] для продолжения" ;;
+      INVALID)      echo "Неверный ввод." ;;
+      TOGGLE_HINT)  echo "(Число=вкл/выкл, a=все, n=нет, Enter=ОК, 0=Назад)" ;;
+      MENU_SCAN)    echo "Сканировать  – показать установки" ;;
+      MENU_BACKUP)  echo "Резервная копия – сохранить данные" ;;
+      MENU_RESTORE) echo "Восстановить – импорт из резервной копии" ;;
+      MENU_MERGE)   echo "Объединить установки" ;;
+      MENU_SYNC)    echo "Синхронизировать с облаком/NAS" ;;
+      MENU_EXIT)    echo "Выход" ;;
+    esac ;;
+    zh) case "$key" in
+      BACK)         echo "返回" ;;
+      CHOOSE)       echo "选择" ;;
+      CONTINUE)     echo "[Enter] 继续" ;;
+      INVALID)      echo "无效输入。" ;;
+      TOGGLE_HINT)  echo "(数字=切换, a=全部, n=无, Enter=确定, 0=返回)" ;;
+      MENU_SCAN)    echo "扫描     – 显示所有安装" ;;
+      MENU_BACKUP)  echo "备份     – 保存数据" ;;
+      MENU_RESTORE) echo "恢复     – 从备份导入" ;;
+      MENU_MERGE)   echo "合并安装" ;;
+      MENU_SYNC)    echo "同步     – 云/NAS同步" ;;
+      MENU_EXIT)    echo "退出" ;;
+    esac ;;
+    en) case "$key" in
+      BACK)         echo "Back" ;;
+      CHOOSE)       echo "Choose" ;;
+      CONTINUE)     echo "[Enter] to continue" ;;
+      INVALID)      echo "Invalid input." ;;
+      TOGGLE_HINT)  echo "(toggle numbers, a=all, n=none, Enter=OK, 0=Back)" ;;
+      MENU_SCAN)    echo "Scan     – Show all installations" ;;
+      MENU_BACKUP)  echo "Backup   – Save data to folder" ;;
+      MENU_RESTORE) echo "Restore  – Import from backup" ;;
+      MENU_MERGE)   echo "Merge    – Combine installations" ;;
+      MENU_SYNC)    echo "Sync     – Synchronize Cloud/NAS" ;;
+      MENU_EXIT)    echo "Exit" ;;
+    esac ;;
+    *) case "$key" in
+      BACK)         echo "Zurück" ;;
+      CHOOSE)       echo "Wähle" ;;
+      CONTINUE)     echo "[Enter] zum Fortfahren" ;;
+      INVALID)      echo "Ungültige Eingabe." ;;
+      TOGGLE_HINT)  echo "(Nummer ein/ausschalten, a=alle, n=keine, Enter=OK, 0=Zurück)" ;;
+      MENU_SCAN)    echo "Scan     – Alle Installationen anzeigen" ;;
+      MENU_BACKUP)  echo "Backup   – Daten sichern" ;;
+      MENU_RESTORE) echo "Restore  – Aus Backup importieren" ;;
+      MENU_MERGE)   echo "Merge    – Installationen zusammenführen" ;;
+      MENU_SYNC)    echo "Sync     – Mit Cloud/NAS synchronisieren" ;;
+      MENU_EXIT)    echo "Beenden" ;;
+    esac ;;
+  esac
+}
 
 # ── Farben ─────────────────────────────────────────────────────────────────────
 R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' B='\033[1;34m' C='\033[0;36m'
@@ -58,7 +126,7 @@ warn() { echo -e "  ${Y}⚠${NC} $*"; }
 err()  { echo -e "  ${R}✗${NC} $*" >&2; }
 info() { echo -e "  ${C}→${NC} $*"; }
 
-pause() { echo; read -r -p "  [Enter] zum Fortfahren..."; }
+pause() { echo; read -r -p "  $(t CONTINUE)..."; }
 
 # Numerisches Menü: menu "Titel" "opt1" "opt2" ... → gibt 1-basierte Auswahl zurück
 menu() {
@@ -72,14 +140,14 @@ menu() {
         echo -e "  ${Y}[$i]${NC} $o"
         ((i++))
     done
-    echo -e "  ${Y}[0]${NC} Zurück"
+    echo -e "  ${Y}[0]${NC} $(t BACK)"
     echo
     local choice
     while true; do
-        read -r -p "  Wähle: " choice
+        read -r -p "  $(t CHOOSE): " choice
         [[ "$choice" == "0" ]] && return 0
         [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#opts[@]} )) && { MENU_CHOICE=$choice; return "$choice"; }
-        echo -e "  ${R}Ungültige Eingabe.${NC}"
+        echo -e "  ${R}$(t INVALID)${NC}"
     done
 }
 
@@ -93,7 +161,7 @@ multiselect() {
 
     while true; do
         echo
-        echo -e "  ${W}$title${NC} ${D}(Leertaste = an/aus, Enter = bestätigen)${NC}"
+        echo -e "  ${W}$title${NC} ${D}$(t TOGGLE_HINT)${NC}"
         sep
         local i=0
         for o in "${opts[@]}"; do
@@ -104,9 +172,9 @@ multiselect() {
             fi
             ((i++))
         done
-        echo -e "  ${Y}[a]${NC} Alle  ${Y}[n]${NC} Keine  ${Y}[Enter]${NC} OK  ${Y}[0]${NC} Zurück"
+        echo -e "  ${Y}[a]${NC} Alle  ${Y}[n]${NC} Keine  ${Y}[Enter]${NC} OK  ${Y}[0]${NC} $(t BACK)"
         echo
-        read -r -p "  Wähle (Nr. oder a/n/Enter): " choice
+        read -r -p "  $(t CHOOSE) (Nr./a/n/Enter): " choice
 
         if [[ -z "$choice" ]]; then
             for i in "${!chosen[@]}"; do
@@ -734,9 +802,9 @@ do_sync() {
         echo -e "  ${Y}[1]${NC} ${W}Sync jetzt ausführen${NC} (bidirektional)"
         echo -e "  ${Y}[2]${NC} Sync-Ordner konfigurieren"
         echo -e "  ${Y}[3]${NC} Sync-Status anzeigen"
-        echo -e "  ${Y}[0]${NC} Zurück"
+        echo -e "  ${Y}[0]${NC} $(t BACK)"
         echo
-        read -r -p "  Wähle: " choice
+        read -r -p "  $(t CHOOSE): " choice
 
         case "$choice" in
             0) return ;;
@@ -827,18 +895,18 @@ main_menu() {
     while true; do
         clear
         echo -e "${B}╔══════════════════════════════════════════════╗${NC}"
-        echo -e "${B}║${W}   RF4 SA  Backup & Migration Tool           ${B}║${NC}"
+        echo -e "${B}║${W}   RF4 SA  Backup & Migration Tool  v1.3    ${B}║${NC}"
         echo -e "${B}╚══════════════════════════════════════════════╝${NC}"
-        echo -e "  ${D}RF4: nga.li/rf4de | Steam: nga.li/rf4steam | Blog: nga.li/rf4b${NC}"
+        echo -e "  ${D}RF4: nga.li/rf4de | Blog: nga.li/rf4b | Donate: paypal.me/NaturalGaming${NC}"
         echo
-        echo -e "  ${Y}[1]${NC} ${W}Scan${NC}     – Alle Installationen anzeigen"
-        echo -e "  ${Y}[2]${NC} ${W}Backup${NC}   – Daten sichern"
-        echo -e "  ${Y}[3]${NC} ${W}Restore${NC}  – In Installation importieren"
-        echo -e "  ${Y}[4]${NC} ${W}Merge${NC}    – Installationen zusammenführen"
-        echo -e "  ${Y}[5]${NC} ${W}Sync${NC}     – Mit Cloud/NAS synchronisieren"
-        echo -e "  ${Y}[0]${NC} Beenden"
+        echo -e "  ${Y}[1]${NC} $(t MENU_SCAN)"
+        echo -e "  ${Y}[2]${NC} $(t MENU_BACKUP)"
+        echo -e "  ${Y}[3]${NC} $(t MENU_RESTORE)"
+        echo -e "  ${Y}[4]${NC} $(t MENU_MERGE)"
+        echo -e "  ${Y}[5]${NC} $(t MENU_SYNC)"
+        echo -e "  ${Y}[0]${NC} $(t MENU_EXIT)"
         echo
-        read -r -p "  Wähle: " choice
+        read -r -p "  $(t CHOOSE): " choice
         case "$choice" in
             1) do_scan ;;
             2) do_backup ;;

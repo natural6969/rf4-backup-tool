@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     RF4 Standalone Backup & Migration Tool – GUI-Version (Windows Forms)
@@ -13,13 +13,43 @@
     Quellcode:     https://nga.li/rf4git  (Codeberg)
     Download:      https://nga.li/rf4dl
     SHA256 verify: Get-FileHash rf4sa-backup-gui.ps1
+    Spenden/Donate: https://paypal.me/NaturalGaming
 .LINK
     https://nga.li/rf4b
 #>
-# Version 1.1.0 – 2026-07-04
+# Version 1.2.0 – 2026-07-04
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "SilentlyContinue"
+
+# ── Sprache / Language ─────────────────────────────────────────────────────────
+$LANG_CODE = switch ((Get-Culture).TwoLetterISOLanguageName.ToLower()) {
+    'de' { 'de' }; 'ru' { 'ru' }; 'zh' { 'zh' }; default { 'en' }
+}
+if ($env:RF4_LANG) { $LANG_CODE = $env:RF4_LANG.ToLower().Substring(0,2) }
+
+$GUI_STRINGS = @{
+    'ACTION_BACKUP_TITLE'   = @{ de='Backup erstellen';             en='Create Backup';           ru='Создать резервную копию';          zh='创建备份' }
+    'ACTION_BACKUP_DESC'    = @{ de='RF4-Daten (Chats, Einstellungen, Screenshots) in einen Ordner deiner Wahl sichern.'; en='Save RF4 data (chats, settings, screenshots) to a folder of your choice.'; ru='Сохранить данные RF4 (чаты, настройки, скриншоты) в выбранную папку.'; zh='将RF4数据（聊天、设置、截图）保存到您选择的文件夹。' }
+    'ACTION_RESTORE_TITLE'  = @{ de='Backup wiederherstellen';      en='Restore Backup';          ru='Восстановить резервную копию';      zh='恢复备份' }
+    'ACTION_RESTORE_DESC'   = @{ de='Gesicherte Daten in eine vorhandene RF4-Installation importieren.'; en='Import saved data into an existing RF4 installation.'; ru='Импортировать сохранённые данные в существующую установку RF4.'; zh='将保存的数据导入到现有的RF4安装中。' }
+    'ACTION_MERGE_TITLE'    = @{ de='Installationen zusammenführen'; en='Merge Installations';    ru='Объединить установки';              zh='合并安装' }
+    'ACTION_MERGE_DESC'     = @{ de='Daten aus einer anderen Installation übertragen – fehlende Nachrichten werden ergänzt, nichts überschrieben.'; en='Transfer data from another installation – missing messages are added, nothing overwritten.'; ru='Перенести данные из другой установки — недостающие сообщения добавляются, ничего не перезаписывается.'; zh='从另一个安装传输数据——添加缺失的消息，不覆盖任何内容。' }
+    'ACTION_SYNC_TITLE'     = @{ de='Cloud / NAS Sync';             en='Cloud / NAS Sync';        ru='Синхронизация с облаком/NAS';       zh='云/NAS同步' }
+    'ACTION_SYNC_DESC'      = @{ de='Mailboxen zwischen PC und Laptop/NAS synchronisieren – Nextcloud, Syncthing, Netzlaufwerk, USB oder jeder geteilte Ordner.'; en='Sync mailboxes between PC and laptop/NAS – Nextcloud, Syncthing, network drive, USB or any shared folder.'; ru='Синхронизировать почтовые ящики между ПК и ноутбуком/NAS – Nextcloud, Syncthing, сетевой диск, USB или любая общая папка.'; zh='在PC和笔记本/NAS之间同步邮箱——Nextcloud、Syncthing、网络驱动器、USB或任何共享文件夹。' }
+    'BTN_BACK'              = @{ de='« Zurück';    en='« Back';    ru='« Назад';    zh='« 返回' }
+    'BTN_NEXT'              = @{ de='Weiter »';    en='Next »';    ru='Далее »';    zh='下一步 »' }
+    'BTN_START'             = @{ de='Starten »';   en='Start »';   ru='Старт »';    zh='开始 »' }
+    'SELECT_ACTION'         = @{ de='Bitte eine Aktion wählen.'; en='Please select an action.'; ru='Пожалуйста, выберите действие.'; zh='请选择一个操作。' }
+    'SELECT_SOURCE'         = @{ de='Bitte eine Quelle wählen.'; en='Please select a source.'; ru='Пожалуйста, выберите источник.'; zh='请选择来源。' }
+    'DONATE_TEXT'           = @{ de='Spenden: paypal.me/NaturalGaming'; en='Donate: paypal.me/NaturalGaming'; ru='Поддержать: paypal.me/NaturalGaming'; zh='捐赠: paypal.me/NaturalGaming' }
+}
+function TG($key) {
+    if ($GUI_STRINGS.ContainsKey($key) -and $GUI_STRINGS[$key].ContainsKey($LANG_CODE)) { return $GUI_STRINGS[$key][$LANG_CODE] }
+    if ($GUI_STRINGS.ContainsKey($key)) { return $GUI_STRINGS[$key]['en'] }
+    return $key
+}
+
 $SYNC_CONFIG_DIR = Join-Path $env:APPDATA "rf4-backup"
 $SYNC_CONFIG     = Join-Path $SYNC_CONFIG_DIR "sync.conf"
 function Get-SyncPath { if (Test-Path $SYNC_CONFIG) { return (Get-Content $SYNC_CONFIG -Raw -EA SilentlyContinue).Trim() }; return "" }
@@ -177,7 +207,7 @@ function Merge-Mailbox {
 # HAUPT-FENSTER
 # ════════════════════════════════════════════════════════════════════════════════
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "RF4 Backup & Migration Tool"
+$form.Text = "RF4 Backup & Migration Tool v1.2"
 $form.Size = [System.Drawing.Size]::new(780, 620)
 $form.StartPosition = "CenterScreen"
 $form.BackColor = $COL_BG
@@ -195,7 +225,7 @@ $form.Controls.Add($pHeader)
 $lblTitle = New-Label "RF4 Backup & Migration" 18 14 400 30 $FONT_TITLE $COL_ACCENT
 $pHeader.Controls.Add($lblTitle)
 
-$lblSub = New-Label "Sichert Mailboxen, Einstellungen und Screenshots – ohne Originaldaten zu verändern." 18 46 600 18 $FONT_SMALL $COL_MUTED
+$lblSub = New-Label "Backup, Restore, Merge, Sync – $(TG 'DONATE_TEXT')" 18 46 700 18 $FONT_SMALL $COL_MUTED
 $pHeader.Controls.Add($lblSub)
 
 # SHA256 self-hash anzeigen
@@ -331,7 +361,7 @@ function Show-ScanPanel {
     $lblSafe = New-Label "Sicher: Das Tool liest nur – keine Originaldaten werden verändert." 18 358 620 18 $FONT_SMALL $COL_GREEN
     $pContent.Controls.Add($lblSafe)
 
-    $btnNext = New-Button "Weiter »" 600 390 140 34 $COL_ACCENT $COL_BG
+    $btnNext = New-Button (TG 'BTN_NEXT') 600 390 140 34 $COL_ACCENT $COL_BG
     $btnNext.Enabled = ($found -gt 0)
     $btnNext.Add_Click({ Show-ActionPanel })
     $pContent.Controls.Add($btnNext)
@@ -348,10 +378,10 @@ function Show-ActionPanel {
     $pContent.Controls.Add($lbl)
 
     $actions = @(
-        @{ Key="backup";  Title="Backup erstellen";          Desc="RF4-Daten (Chats, Einstellungen, Screenshots) in einen Ordner deiner Wahl sichern." },
-        @{ Key="restore"; Title="Backup wiederherstellen";   Desc="Gesicherte Daten in eine vorhandene RF4-Installation importieren." },
-        @{ Key="merge";   Title="Installationen zusammenführen"; Desc="Daten aus einer anderen Installation übertragen – fehlende Nachrichten werden ergänzt, nichts überschrieben." },
-        @{ Key="sync";    Title="Cloud / NAS Sync";          Desc="Mailboxen zwischen PC und Laptop/NAS synchronisieren – Nextcloud, Syncthing, Netzlaufwerk, USB oder jeder geteilte Ordner." }
+        @{ Key="backup";  Title=(TG 'ACTION_BACKUP_TITLE');  Desc=(TG 'ACTION_BACKUP_DESC') },
+        @{ Key="restore"; Title=(TG 'ACTION_RESTORE_TITLE'); Desc=(TG 'ACTION_RESTORE_DESC') },
+        @{ Key="merge";   Title=(TG 'ACTION_MERGE_TITLE');   Desc=(TG 'ACTION_MERGE_DESC') },
+        @{ Key="sync";    Title=(TG 'ACTION_SYNC_TITLE');    Desc=(TG 'ACTION_SYNC_DESC') }
     )
 
     $y = 50
@@ -404,13 +434,13 @@ function Show-ActionPanel {
     }
     $script:btns = $btns
 
-    $btnBack = New-Button "« Zurück" 18 390 120 34 $COL_BORDER $COL_TEXT
+    $btnBack = New-Button (TG 'BTN_BACK') 18 390 120 34 $COL_BORDER $COL_TEXT
     $btnBack.Add_Click({ Show-ScanPanel })
     $pContent.Controls.Add($btnBack)
 
-    $btnNext = New-Button "Weiter »" 600 390 140 34 $COL_ACCENT $COL_BG
+    $btnNext = New-Button (TG 'BTN_NEXT') 600 390 140 34 $COL_ACCENT $COL_BG
     $btnNext.Add_Click({
-        if (-not $state.Action) { [System.Windows.Forms.MessageBox]::Show("Bitte eine Aktion wählen.","RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return }
+        if (-not $state.Action) { [System.Windows.Forms.MessageBox]::Show((TG 'SELECT_ACTION'),"RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return }
         switch ($state.Action) {
             "backup"  { Show-SourcePanel "backup" }
             "restore" { Show-RestoreSourcePanel }
@@ -475,7 +505,7 @@ function Show-SourcePanel {
     })
     $pContent.Controls.Add($btnBrowse)
 
-    $btnBack = New-Button "« Zurück" 18 390 120 34 $COL_BORDER $COL_TEXT
+    $btnBack = New-Button (TG 'BTN_BACK') 18 390 120 34 $COL_BORDER $COL_TEXT
     $btnBack.Add_Click({ Show-ActionPanel })
     $pContent.Controls.Add($btnBack)
 
@@ -640,11 +670,11 @@ function Show-RestoreSourcePanel {
     foreach ($i in $existing) { $lstDst.Items.Add($i.Label) | Out-Null }
     $pContent.Controls.Add($lstDst)
 
-    $btnBack = New-Button "« Zurück" 18 390 120 34 $COL_BORDER $COL_TEXT
+    $btnBack = New-Button (TG 'BTN_BACK') 18 390 120 34 $COL_BORDER $COL_TEXT
     $btnBack.Add_Click({ Show-ActionPanel })
     $pContent.Controls.Add($btnBack)
 
-    $btnNext = New-Button "Weiter »" 600 390 140 34 $COL_ACCENT $COL_BG
+    $btnNext = New-Button (TG 'BTN_NEXT') 600 390 140 34 $COL_ACCENT $COL_BG
     $btnNext.Add_Click({
         if (-not (Test-Path $txtDir.Text)) { [System.Windows.Forms.MessageBox]::Show("Backup-Ordner nicht gefunden.","RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return }
         if ($lstDst.SelectedIndex -lt 0) { [System.Windows.Forms.MessageBox]::Show("Bitte Ziel-Installation wählen.","RF4 Tool",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return }
@@ -717,7 +747,7 @@ function Show-MergePanel {
     if ($existing.Count -lt 2) {
         $lbl2 = New-Label "Mindestens 2 vorhandene Installationen nötig." 18 80 500 22 $FONT_MAIN $COL_WARN
         $pContent.Controls.Add($lbl2)
-        $btnBack = New-Button "« Zurück" 18 390 120 34 $COL_BORDER $COL_TEXT
+        $btnBack = New-Button (TG 'BTN_BACK') 18 390 120 34 $COL_BORDER $COL_TEXT
         $btnBack.Add_Click({ Show-ActionPanel }); $pContent.Controls.Add($btnBack)
         return
     }
@@ -741,7 +771,7 @@ function Show-MergePanel {
     foreach ($i in $existing) { $lstSrc.Items.Add($i.Label) | Out-Null }
     $pContent.Controls.Add($lstSrc)
 
-    $btnBack = New-Button "« Zurück" 18 390 120 34 $COL_BORDER $COL_TEXT
+    $btnBack = New-Button (TG 'BTN_BACK') 18 390 120 34 $COL_BORDER $COL_TEXT
     $btnBack.Add_Click({ Show-ActionPanel }); $pContent.Controls.Add($btnBack)
 
     $btnStart = New-Button "Merge starten" 560 390 180 34 $COL_GREEN $COL_BG
@@ -869,7 +899,7 @@ function Show-SyncPanel {
     $btnRefresh.Add_Click({ Update-SyncStatus })
     $pContent.Controls.Add($btnRefresh)
 
-    $btnBack = New-Button "« Zurück" 18 390 120 34 $COL_BORDER $COL_TEXT
+    $btnBack = New-Button (TG 'BTN_BACK') 18 390 120 34 $COL_BORDER $COL_TEXT
     $btnBack.Add_Click({ Show-ActionPanel })
     $pContent.Controls.Add($btnBack)
 
@@ -932,7 +962,7 @@ function Do-SyncRunGUI {
             $lt = (Get-Item $lf).LastWriteTimeUtc; $st = (Get-Item $sf).LastWriteTimeUtc
             if    ($lt -gt $st) { Copy-Item $lf $sf -Force; $log += "[OK] $dat -> Sync (lokal neuer)`n" }
             elseif ($st -gt $lt){ Copy-Item $sf $lf -Force; $log += "[OK] $dat <- Sync (Sync neuer)`n" }
-            else                 { $log += "     $dat: identisch, übersprungen`n" }
+            else                 { $log += "     ${dat}: identisch, übersprungen`n" }
         }
     }
 
