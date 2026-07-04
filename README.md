@@ -7,6 +7,7 @@ Für Windows (PowerShell, mit GUI) und Linux (Bash).
 
 📄 **Vollständige Anleitung:** [nga.li/rf4b](https://nga.li/rf4b)
 📥 **Direkter Download:** [nga.li/rf4dl](https://nga.li/rf4dl)
+🎬 **Video Walkthrough:** *(in Produktion — alle 5 Funktionen gezeigt)*
 
 ---
 
