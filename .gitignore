@@ -1,0 +1,16 @@
+# Editor
+.vscode/
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Temp / Test
+*.tmp
+RF4_Backup/
+test/

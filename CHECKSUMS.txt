@@ -1,0 +1,27 @@
+# RF4 Backup Tool — Prüfsummen / Checksums
+# Version 1.1.0 — 2026-07-04
+#
+# Verifizieren:
+#   Windows: Get-FileHash <datei> -Algorithm SHA256
+#   Linux:   sha256sum <datei>   /   sha1sum <datei>   /   md5sum <datei>
+
+# ── rf4sa-backup-gui.ps1 (Windows GUI) ────────────────────────────────────────
+MD5     d1b0d3603fc4653f861066c25b463cd4  rf4sa-backup-gui.ps1
+SHA1    c142ca0d62f128599d684710d8abe0356dda3bd4  rf4sa-backup-gui.ps1
+SHA256  211f3bad44a1983417445f479210cf6c266fefb6c26a1074e0b46c658946c36b  rf4sa-backup-gui.ps1
+SHA512  a70c2a8f136bd29260957006f5ad9e1a43e9e01e517aa5a45c5cf59d34a18ebd\
+        03e4f5860a8dd5e09821066268386f40eb598785c5b094e2aa008bafb8ea5361  rf4sa-backup-gui.ps1
+
+# ── rf4sa-backup.ps1 (Windows Terminal) ───────────────────────────────────────
+MD5     d2fa6b73613eab478f94fdac158cb80d  rf4sa-backup.ps1
+SHA1    379329acef88e956f17697451ad90070c7c25897  rf4sa-backup.ps1
+SHA256  69ec455a8d214bc34cf46820707e401cdaf187e85ef0515749afe37d50553aa2  rf4sa-backup.ps1
+SHA512  b885389021be72f43f7f470ed0b21965d8259a30b311059e050c63f883dd30a3\
+        bdef55c5adf817d66a510e62e660a7606bcdba30c407b19cc6b7ffadc2fc822a  rf4sa-backup.ps1
+
+# ── rf4sa-backup.sh (Linux / Bash) ────────────────────────────────────────────
+MD5     6399384c6e17c6bab00295aed418c260  rf4sa-backup.sh
+SHA1    e5c4aed05928a716f80e08611fa63c37f0758d5f  rf4sa-backup.sh
+SHA256  b87412689d238e8eb1b7a2f8f7fbf97c4ab2157e8af048aca132b226238acc81  rf4sa-backup.sh
+SHA512  df2446030d00caa0767cd0e2c33fc9864e66d262964bcec7a979ea81b1725c88\
+        6e33da1e95d43494f354a2714d404926f2cb64f1730bde193ed3d1c03feb1ae8  rf4sa-backup.sh
