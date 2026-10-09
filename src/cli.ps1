@@ -197,7 +197,7 @@ function Do-Restore {
     $bks = @(Find-Backups)
     $src = $null
     if ($bks.Count -gt 0) {
-        $opts = @($bks | ForEach-Object { "$($_.Name)`n        $($_.Path)`n        $($_.SourceLabel)`n        $(Format-BackupInfo $_)`n        $(Format-BackupDates $_)" }) + @(T 'manual_path')
+        $opts = @($bks | ForEach-Object { "$($_.Name)$(if ($_.IsSync) { "  [" + (T 'bk_badge_sync') + "]" })`n        $($_.Path)`n        $($_.SourceLabel)`n        $(Format-BackupInfo $_)`n        $(Format-BackupDates $_)" }) + @(T 'manual_path')
         $c = Show-Menu (T 'pick_backup_list') $opts
         if ($c -eq 0) { return }
         if ($c -le $bks.Count) { $src = $bks[$c - 1].Path }
@@ -207,6 +207,9 @@ function Do-Restore {
         if ([string]::IsNullOrWhiteSpace($src)) { $src = $def }
     }
     if (-not (Test-Path -LiteralPath $src)) { Write-Err (T 'folder_missing' @($src)); Pause-Menu; return }
+    $rp = Resolve-BackupPath $src
+    if (-not $rp) { Write-Err (T 'restore_path_bad'); Pause-Menu; return }
+    $src = $rp
     $bc = Get-BackupContents $src
     if ($bc.Empty) { Write-Warn (T 'no_backup_here'); Pause-Menu; return }
     Write-Info (T 'contents')
@@ -357,6 +360,7 @@ function Show-Main {
         Write-Host ''
         $mi = @(@('1', 'menu_scan'), @('2', 'menu_backup'), @('3', 'menu_restore'), @('4', 'menu_merge'), @('5', 'menu_sync'))
         foreach ($m in $mi) { Write-Host "   [$($m[0])]" -ForegroundColor Yellow -NoNewline; Write-Host " $(T $m[1])" }
+        Write-Host '   [H]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'menu_help')"
         Write-Host '   [L]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'menu_lang')  " -NoNewline; Write-Host "($($script:LangNames[$script:Lang]))" -ForegroundColor Cyan
         Write-Host '   [0]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'exit')"
         Write-Host ''
@@ -366,6 +370,7 @@ function Show-Main {
             switch ($raw.Trim().ToLowerInvariant()) {
                 '1' { Do-Scan } '2' { Do-Backup } '3' { Do-Restore } '4' { Do-Merge } '5' { Do-Sync }
                 'l' { Do-Language }
+                'h' { Open-Guide }
                 '0' { return }
             }
         } catch { Write-Err $_.Exception.Message; Pause-Menu }

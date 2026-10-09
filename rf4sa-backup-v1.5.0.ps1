@@ -341,6 +341,14 @@ bk_source_unknown=Quelle: unbekannt (Backup ohne Info-Datei)
 bk_from_pc=(PC {0})
 bk_dates=Erstellt: {0}   ·   Aktualisiert: {1}
 bk_existing_here=Hier liegt schon ein Backup. {0}
+bk_source_sync=Quelle: gemeinsamer Sync-Ordner – zuletzt abgeglichen von PC {0} am {1}
+bk_source_sync_unknown=Quelle: gemeinsamer Sync-Ordner (noch keine Sync-Einträge)
+bk_sync_hint=Gemeinsamer Ordner aller Geräte – Restore holt den abgeglichenen Stand von dort.
+bk_badge_sync=Sync
+menu_help=Hilfe / Anleitung
+help_btn=Hilfe
+tip_help=Anleitung mit Screenshots in deiner Sprache öffnen
+restore_path_bad=Dort wurde kein Backup gefunden (auch nicht im Unterordner RF4_Sync). Ordner nicht erreichbar?
 @@FILE lang/en.lang
 # RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
 # Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
@@ -584,6 +592,14 @@ bk_source_unknown=Source: unknown (backup without info file)
 bk_from_pc=(PC {0})
 bk_dates=Created: {0}   ·   Updated: {1}
 bk_existing_here=There is already a backup here. {0}
+bk_source_sync=Source: shared sync folder – last synced by PC {0} on {1}
+bk_source_sync_unknown=Source: shared sync folder (no sync entries yet)
+bk_sync_hint=Shared folder of all devices – restore pulls the synced state from here.
+bk_badge_sync=Sync
+menu_help=Help / guide
+help_btn=Help
+tip_help=Open the guide with screenshots in your language
+restore_path_bad=No backup found there (not in a RF4_Sync subfolder either). Folder not reachable?
 @@FILE lang/ru.lang
 # RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
 # Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
@@ -827,6 +843,14 @@ bk_source_unknown=Источник: неизвестен (копия без ин
 bk_from_pc=(ПК {0})
 bk_dates=Создана: {0}   ·   Обновлена: {1}
 bk_existing_here=Здесь уже есть копия. {0}
+bk_source_sync=Источник: общая папка синхронизации – последний раз синхронизировал ПК {0}, {1}
+bk_source_sync_unknown=Источник: общая папка синхронизации (записей синхронизации пока нет)
+bk_sync_hint=Общая папка всех устройств — восстановление берёт отсюда синхронизированное состояние.
+bk_badge_sync=Sync
+menu_help=Справка / руководство
+help_btn=Справка
+tip_help=Открыть руководство со скриншотами на вашем языке
+restore_path_bad=Там не найдена резервная копия (в подпапке RF4_Sync тоже). Папка недоступна?
 @@FILE lang/zh.lang
 # RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
 # Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
@@ -1070,6 +1094,14 @@ bk_source_unknown=来源: 未知（备份没有信息文件）
 bk_from_pc=（电脑 {0}）
 bk_dates=创建: {0}   ·   更新: {1}
 bk_existing_here=此处已有备份。{0}
+bk_source_sync=来源: 共享同步文件夹 – 最后由电脑 {0} 于 {1} 同步
+bk_source_sync_unknown=来源: 共享同步文件夹（尚无同步记录）
+bk_sync_hint=所有设备共用的文件夹——恢复会从这里取回已同步的内容。
+bk_badge_sync=同步
+menu_help=帮助 / 指南
+help_btn=帮助
+tip_help=用您的语言打开带截图的指南
+restore_path_bad=在那里没有找到备份（RF4_Sync 子文件夹中也没有）。文件夹无法访问？
 @@FILE themes/dark.theme
 # RF4 Backup Tool - Theme. Eigene Themes: Datei in themes\ (neben dem Skript) oder %APPDATA%\rf4-backup\themes\ ablegen.
 # @base = dark|light  (welcher Windows-Modus dieses Theme bei 'Automatisch' ersetzt)
@@ -1163,6 +1195,22 @@ function Get-ThemeColors([string]$code) {
     return $out
 }
 
+# ── Hilfe: Anleitung in der Sprache des Programms öffnen ──────────────────────
+function Get-GuideCode { if (@('de', 'en', 'zh', 'ru') -contains $script:Lang) { return $script:Lang } else { return 'en' } }
+function Get-GuidePath {
+    $code = Get-GuideCode
+    foreach ($dir in @($PSScriptRoot, $(if ($PSScriptRoot) { Join-Path $PSScriptRoot '..' }))) {
+        if (-not $dir) { continue }
+        $p = Join-Path $dir "docs\guide.$code.html"
+        if (Test-Path -LiteralPath $p) { return (Resolve-Path -LiteralPath $p).Path }
+    }
+    return $null
+}
+function Get-GuideUrl {
+    $code = Get-GuideCode; $suffix = $(if ($code -eq 'de') { '' } else { ".$code" })
+    return "https://codeberg.org/Natural78/rf4-backup-tool/src/branch/main/README$suffix.md"
+}
+function Open-Guide { $p = Get-GuidePath; try { if ($p) { Start-Process -FilePath $p } else { Start-Process (Get-GuideUrl) } } catch { } }
 # ── Konfiguration (Sprache, Theme, Sync-Ordner, Backup-Ordner) ─────────────────
 function Get-ConfigDir  { Join-Path $env:APPDATA 'rf4-backup' }
 function Get-ConfigFile { Join-Path (Get-ConfigDir) 'settings.json' }
@@ -1567,6 +1615,7 @@ function Get-BackupSourceLabel($info) {
     return (T 'bk_source' @($s))
 }
 function Format-BackupDates($bk) {
+    if ($bk.PSObject.Properties['IsSync'] -and $bk.IsSync) { return (T 'bk_sync_hint') }
     $c = if ($bk.Created) { $bk.Created } else { '?' }; $u = if ($bk.Updated) { $bk.Updated } else { $bk.Time.ToString('yyyy-MM-dd HH:mm') }
     return (T 'bk_dates' @($c, $u))
 }
@@ -1577,15 +1626,43 @@ function Get-BackupEntry([string]$c) {
     foreach ($fi in $files) { $size += $fi.Length; if ($fi.LastWriteTime -gt $latest) { $latest = $fi.LastWriteTime } }
     $convs = 0; foreach ($m in $bc.Mailboxes) { $convs += $m.Convs }
     $inf = Read-BackupInfo $c
+    $isSync = ((Split-Path $c -Leaf) -eq 'RF4_Sync')
+    $label = Get-BackupSourceLabel $inf; $upd = $(if ($inf) { $inf.Updated } else { '' })
+    if ($isSync -and -not $inf) {
+        $sl = Get-SyncLogInfo $c
+        $label = if ($sl) { T 'bk_source_sync' @($sl.Host, $sl.Time) } else { T 'bk_source_sync_unknown' }
+        if ($sl) { $upd = $sl.Time }
+    }
     return [pscustomobject]@{ Path = $c; Name = (Split-Path $c -Leaf); Time = $latest; SizeBytes = $size; Mailboxes = $bc.Mailboxes.Count; Convs = $convs; Files = $bc.Files; Shots = $bc.Shots
-        Info = $inf; Created = $(if ($inf) { $inf.Created } else { '' }); Updated = $(if ($inf) { $inf.Updated } else { '' }); SourceLabel = (Get-BackupSourceLabel $inf) }
+        Info = $inf; Created = $(if ($inf) { $inf.Created } else { '' }); Updated = $upd; SourceLabel = $label; IsSync = $isSync }
 }
 # Mehrzeiliger Beschreibungstext eines Backups (für Karten/Menüs)
 function Format-BackupCard($bk) { return ($bk.Path + "`n" + $bk.SourceLabel + "`n" + (Format-BackupInfo $bk) + "`n" + (Format-BackupDates $bk)) }
+# Akzeptiert auch den ÜBERGEORDNETEN Ordner eines Sync-Ordners (…\RF4_Sync): liefert den Pfad, aus dem wiederhergestellt werden kann, sonst $null
+function Resolve-BackupPath([string]$p) {
+    if ([string]::IsNullOrWhiteSpace($p)) { return $null }
+    if (Test-LooksLikeBackup $p) { return $p }
+    $s = Join-Path $p 'RF4_Sync'
+    if (Test-LooksLikeBackup $s) { return $s }
+    return $null
+}
+# letzte Zeile von .sync_log: "2026-10-09T09:01:08Z HOSTNAME"
+function Get-SyncLogInfo([string]$dir) {
+    $f = Join-Path $dir '.sync_log'
+    if (-not (Test-Path -LiteralPath $f)) { return $null }
+    try {
+        $last = @(Get-Content -LiteralPath $f -ErrorAction Stop | Where-Object { $_.Trim() } | Select-Object -Last 1)[0]
+        $m = [regex]::Match([string]$last, '^(\S+)\s+(.*)$')
+        if (-not $m.Success) { return $null }
+        $dt = [datetime]::MinValue; [void][datetime]::TryParse($m.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal -bor [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$dt)
+        return [pscustomobject]@{ Host = $m.Groups[2].Value.Trim(); Time = $(if ($dt -ne [datetime]::MinValue) { $dt.ToLocalTime().ToString('yyyy-MM-dd HH:mm') } else { $m.Groups[1].Value }) }
+    } catch { return $null }
+}
 function Find-Backups {
     $bases = New-Object System.Collections.Generic.List[string]
     $bases.Add((Get-DefaultBackupDir))
     foreach ($d in @((Get-Config).backupDirs)) { if ($d) { $bases.Add($d) } }
+    $sp = Get-SyncPath; if ($sp) { try { if (Test-Path -LiteralPath $sp -PathType Container) { $bases.Add($sp) } } catch { } }
     foreach ($x in @(([string]$env:RF4_BACKUP_DIRS) -split ';' | Where-Object { $_ })) { $bases.Add($x) }
     $seen = New-Object 'System.Collections.Generic.HashSet[string]'
     $found = New-Object System.Collections.Generic.List[object]
@@ -1880,7 +1957,7 @@ function Do-Restore {
     $bks = @(Find-Backups)
     $src = $null
     if ($bks.Count -gt 0) {
-        $opts = @($bks | ForEach-Object { "$($_.Name)`n        $($_.Path)`n        $($_.SourceLabel)`n        $(Format-BackupInfo $_)`n        $(Format-BackupDates $_)" }) + @(T 'manual_path')
+        $opts = @($bks | ForEach-Object { "$($_.Name)$(if ($_.IsSync) { "  [" + (T 'bk_badge_sync') + "]" })`n        $($_.Path)`n        $($_.SourceLabel)`n        $(Format-BackupInfo $_)`n        $(Format-BackupDates $_)" }) + @(T 'manual_path')
         $c = Show-Menu (T 'pick_backup_list') $opts
         if ($c -eq 0) { return }
         if ($c -le $bks.Count) { $src = $bks[$c - 1].Path }
@@ -1890,6 +1967,9 @@ function Do-Restore {
         if ([string]::IsNullOrWhiteSpace($src)) { $src = $def }
     }
     if (-not (Test-Path -LiteralPath $src)) { Write-Err (T 'folder_missing' @($src)); Pause-Menu; return }
+    $rp = Resolve-BackupPath $src
+    if (-not $rp) { Write-Err (T 'restore_path_bad'); Pause-Menu; return }
+    $src = $rp
     $bc = Get-BackupContents $src
     if ($bc.Empty) { Write-Warn (T 'no_backup_here'); Pause-Menu; return }
     Write-Info (T 'contents')
@@ -2040,6 +2120,7 @@ function Show-Main {
         Write-Host ''
         $mi = @(@('1', 'menu_scan'), @('2', 'menu_backup'), @('3', 'menu_restore'), @('4', 'menu_merge'), @('5', 'menu_sync'))
         foreach ($m in $mi) { Write-Host "   [$($m[0])]" -ForegroundColor Yellow -NoNewline; Write-Host " $(T $m[1])" }
+        Write-Host '   [H]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'menu_help')"
         Write-Host '   [L]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'menu_lang')  " -NoNewline; Write-Host "($($script:LangNames[$script:Lang]))" -ForegroundColor Cyan
         Write-Host '   [0]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'exit')"
         Write-Host ''
@@ -2049,6 +2130,7 @@ function Show-Main {
             switch ($raw.Trim().ToLowerInvariant()) {
                 '1' { Do-Scan } '2' { Do-Backup } '3' { Do-Restore } '4' { Do-Merge } '5' { Do-Sync }
                 'l' { Do-Language }
+                'h' { Open-Guide }
                 '0' { return }
             }
         } catch { Write-Err $_.Exception.Message; Pause-Menu }

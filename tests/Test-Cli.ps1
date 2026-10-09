@@ -1,9 +1,10 @@
 ﻿#Requires -Version 5.1
-# Terminal-Test: startet rf4sa-backup.ps1 als Kindprozess, füttert Eingaben über stdin und prüft die Ausgabe
+# Terminal-Test: startet rf4sa-backup-v<Version>.ps1 als Kindprozess, füttert Eingaben über stdin und prüft die Ausgabe
 # (alle Sprachen, Rahmenbreite auch mit CJK, ASCII-Fallback, Backup→Restore (vorhandene Backups)→Merge→Sync, Sprachwechsel).
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$cli = Join-Path $root 'rf4sa-backup.ps1'
+$ver = [regex]::Match([IO.File]::ReadAllText((Join-Path $root 'src\core.ps1')), "ToolVersion = '([\d\.]+)'").Groups[1].Value
+$cli = Join-Path $root "rf4sa-backup-v$ver.ps1"
 $script:pass = 0; $script:fail = 0
 function Ok([bool]$c, [string]$n, $d = '') { if ($c) { $script:pass++; Write-Host "  PASS  $n" -ForegroundColor Green } else { $script:fail++; Write-Host "  FAIL  $n  $d" -ForegroundColor Red } }
 

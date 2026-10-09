@@ -541,6 +541,38 @@ fmt_size() {
     else printf '%d B' "$b"; fi
 }
 fmt_time() { date -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$1"; }
+# Pfad, aus dem wiederhergestellt werden kann: der Ordner selbst oder dessen Unterordner RF4_Sync (leer = nichts gefunden)
+resolve_backup_path() {
+    local p="${1%/}"
+    [[ -z "$p" ]] && return 0
+    if looks_like_backup "$p"; then printf '%s' "$p"; elif looks_like_backup "$p/RF4_Sync"; then printf '%s' "$p/RF4_Sync"; fi
+}
+# Quelle eines Backups; Sync-Ordner (RF4_Sync) ohne Info-Datei: letzte Zeile von .sync_log
+bk_source_for() {
+    read_backup_info "$1"
+    if (( BI_OK == 0 )) && [[ "$(basename "$1")" == "RF4_Sync" ]]; then
+        local last host ts tsl
+        last="$(grep -v '^[[:space:]]*$' "$1/.sync_log" 2>/dev/null | tail -1)"
+        if [[ -n "$last" ]]; then
+            ts="${last%% *}"; host="${last#* }"
+            tsl="$(date -d "$ts" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$ts")"
+            t bk_source_sync "$host" "$tsl"
+        else t bk_source_sync_unknown; fi
+    else bk_source_text; fi
+}
+# Anleitung in der Sprache des Programms öffnen
+open_guide() {
+    local code="$LANG_CODE" f="" url suffix=""
+    case "$code" in de|en|zh|ru) ;; *) code=en ;; esac
+    for f in "$SCRIPT_DIR/docs/guide.$code.html" "$SCRIPT_DIR/../docs/guide.$code.html"; do [[ -f "$f" ]] && break; f=""; done
+    [[ "$code" != "de" ]] && suffix=".$code"
+    url="https://codeberg.org/Natural78/rf4-backup-tool/src/branch/main/README$suffix.md"
+    local target="${f:-$url}"
+    if command -v xdg-open >/dev/null 2>&1; then xdg-open "$target" >/dev/null 2>&1 &
+    elif command -v open >/dev/null 2>&1; then open "$target" >/dev/null 2>&1 &
+    elif command -v cmd.exe >/dev/null 2>&1; then cmd.exe /c start "" "$target" >/dev/null 2>&1 &
+    else info "$target"; fi
+}
 declare -a BK_PATH=() BK_NAME=() BK_TIME=() BK_SIZE=() BK_MBOX=() BK_CONV=() BK_FILES=() BK_SHOTS=() BK_SRC=() BK_DATES=()
 find_backups() {
     BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=(); BK_SRC=(); BK_DATES=()
@@ -548,6 +580,7 @@ find_backups() {
     local -A seen=()
     local l b c base f m latest size convs files shots i
     while IFS= read -r l; do [[ -n "$l" ]] && bases+=("$l"); done < <(cfg_backup_dirs)
+    l="$(sync_get)"; [[ -n "$l" && -d "$l" ]] && bases+=("$l")
     if [[ -n "${RF4_BACKUP_DIRS:-}" ]]; then IFS=':' read -ra cand <<< "$RF4_BACKUP_DIRS"; for l in "${cand[@]}"; do bases+=("$l"); done; fi
     for b in "${bases[@]}"; do
         [[ -d "$b" ]] || continue
@@ -566,7 +599,8 @@ find_backups() {
             while IFS= read -r -d '' f; do size=$((size + $(stat -c %s "$f" 2>/dev/null || stat -f %z "$f" 2>/dev/null || echo 0))); m=$(file_mtime "$f"); (( m > latest )) && latest=$m; done < <(find "$c" -type f -print0 2>/dev/null)
             read_backup_info "$c"
             BK_PATH+=("$c"); BK_NAME+=("$base"); BK_TIME+=("$latest"); BK_SIZE+=("$size"); BK_MBOX+=("${#MB_NAME[@]}"); BK_CONV+=("$convs"); BK_FILES+=("$files"); BK_SHOTS+=("$shots")
-            BK_SRC+=("$(bk_source_text)"); BK_DATES+=("$(t bk_dates "${BI_CREATED:-?}" "${BI_UPDATED:-$(fmt_time "$latest")}")")
+            BK_SRC+=("$(bk_source_for "$c")")
+            if [[ "$base" == "RF4_Sync" && $BI_OK -eq 0 ]]; then BK_DATES+=("$(t bk_sync_hint)"); else BK_DATES+=("$(t bk_dates "${BI_CREATED:-?}" "${BI_UPDATED:-$(fmt_time "$latest")}")"); fi
         done
     done
     # neueste zuerst
@@ -660,7 +694,7 @@ do_restore() {
     find_backups
     if (( ${#BK_PATH[@]} > 0 )); then
         local -a bopts=()
-        for bi in "${!BK_PATH[@]}"; do bopts+=("${BK_NAME[$bi]}"$'\n'"        ${BK_PATH[$bi]}"$'\n'"        ${BK_SRC[$bi]}"$'\n'"        $(bk_info "$bi")"$'\n'"        ${BK_DATES[$bi]}"); done
+        for bi in "${!BK_PATH[@]}"; do bopts+=("${BK_NAME[$bi]}$([[ "${BK_NAME[$bi]}" == RF4_Sync ]] && printf "  [%s]" "$(t bk_badge_sync)")"$'\n'"        ${BK_PATH[$bi]}"$'\n'"        ${BK_SRC[$bi]}"$'\n'"        $(bk_info "$bi")"$'\n'"        ${BK_DATES[$bi]}"); done
         bopts+=("$(t manual_path)")
         menu "$(t pick_backup_list)" "${bopts[@]}"; (( MENU_CHOICE == 0 )) && return
         (( MENU_CHOICE <= ${#BK_PATH[@]} )) && src="${BK_PATH[$((MENU_CHOICE - 1))]}"
@@ -670,6 +704,9 @@ do_restore() {
         [[ -z "$src" ]] && src="$def"
     fi
     [[ -d "$src" ]] || { err "$(t folder_missing "$src")"; pause; return; }
+    local rp; rp="$(resolve_backup_path "$src")"
+    [[ -z "$rp" ]] && { err "$(t restore_path_bad)"; pause; return; }
+    src="$rp"
     load_mailboxes "$src"
     local -a bk_names=("${MB_NAME[@]}") bk_ids=("${MB_ID[@]}") bk_convs=("${MB_CONVS[@]}") bk_files=()
     local f i shots=0
@@ -850,12 +887,12 @@ main_menu() {
         echo
         printf '%s\n' "  ${Y}[1]${NC} $(t menu_scan)" "  ${Y}[2]${NC} $(t menu_backup)" "  ${Y}[3]${NC} $(t menu_restore)" \
                       "  ${Y}[4]${NC} $(t menu_merge)" "  ${Y}[5]${NC} $(t menu_sync)" \
-                      "  ${Y}[L]${NC} $(t menu_lang) (${LANG_NAMES[$LANG_CODE]})" "  ${Y}[0]${NC} $(t exit)" ""
+                      "  ${Y}[H]${NC} $(t menu_help)" "  ${Y}[L]${NC} $(t menu_lang) (${LANG_NAMES[$LANG_CODE]})" "  ${Y}[0]${NC} $(t exit)" ""
         read -r -p "  $(t choose): " raw || return 0
         raw="${raw,,}"; raw="${raw//[[:space:]]/}"
         case "$raw" in
             1) do_scan ;; 2) do_backup ;; 3) do_restore ;; 4) do_merge ;; 5) do_sync ;;
-            l) do_language ;; 0) return 0 ;;
+            l) do_language ;; h) open_guide ;; 0) return 0 ;;
         esac
     done
 }

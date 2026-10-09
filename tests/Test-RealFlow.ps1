@@ -25,7 +25,8 @@ function Count-Msgs([string]$dir) { $n = 0; foreach ($f in (Get-ChildItem $dir -
 function Count-Convs([string]$dir) { @(Get-ChildItem $dir -Recurse -Filter '*.dat' -File | ? { $_.DirectoryName -match 'Mailbox_' }).Count }
 
 try {
-    . (Join-Path $root 'rf4sa-backup-gui.ps1') -Lang de
+    $ver = [regex]::Match([IO.File]::ReadAllText((Join-Path $root 'src\core.ps1')), "ToolVersion = '([\d\.]+)'").Groups[1].Value
+    . (Join-Path $root "rf4sa-backup-gui-v$ver.ps1") -Lang de
     $form.Show(); [System.Windows.Forms.Application]::DoEvents()
     function Pump { [System.Windows.Forms.Application]::DoEvents() }
     function Walk($ctl) { foreach ($c in $ctl.Controls) { $c; Walk $c } }

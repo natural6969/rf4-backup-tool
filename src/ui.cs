@@ -1,4 +1,4 @@
-// RF4 Backup Tool – UI-Bausteine (WinForms, selbst gezeichnet: scharf bei jeder DPI, theme-fähig).
+﻿// RF4 Backup Tool – UI-Bausteine (WinForms, selbst gezeichnet: scharf bei jeder DPI, theme-fähig).
 // Wird von build.ps1 in rf4sa-backup-gui.ps1 eingebettet und per Add-Type kompiliert (C# 5!).
 using System;
 using System.Collections.Generic;
@@ -51,6 +51,14 @@ namespace Rf4Ui
         // dunkle bzw. helle Scrollbars (Win10 1809+)
         public static void DarkScroll(IntPtr h, bool dark) { try { SetWindowTheme(h, dark ? "DarkMode_Explorer" : "Explorer", null); } catch { } }
 
+        [DllImport("kernel32.dll")] static extern IntPtr GetConsoleWindow();
+        [DllImport("kernel32.dll")] static extern uint GetConsoleProcessList(uint[] list, uint count);
+        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+        // Konsolenfenster ausblenden, aber nur wenn es dem Programm allein gehoert (Doppelklick/Rechtsklick), nicht bei Start aus einem Terminal
+        public static void HideConsole()
+        {
+            try { IntPtr h = GetConsoleWindow(); if (h != IntPtr.Zero && GetConsoleProcessList(new uint[4], 4) <= 1) ShowWindow(h, 0); } catch { }
+        }
         public static void EnableDpi()
         {
             try { if (!SetProcessDpiAwarenessContext(new IntPtr(-4))) SetProcessDPIAware(); }
@@ -169,6 +177,18 @@ namespace Rf4Ui
                         break;
                     case "folder":
                         g.DrawLines(pen, new PointF[] { P(r, .1f, .26f), P(r, .1f, .8f), P(r, .9f, .8f), P(r, .9f, .34f), P(r, .46f, .34f), P(r, .38f, .22f), P(r, .1f, .22f), P(r, .1f, .26f) });
+                        break;
+                    case "help":
+                        {
+                            RectangleF a = new RectangleF(r.X + r.Width * .1f, r.Y + r.Height * .1f, r.Width * .8f, r.Height * .8f);
+                            g.DrawEllipse(pen, a);
+                            using (Font qf = new Font("Segoe UI", Math.Max(6f, r.Height * .5f), FontStyle.Bold, GraphicsUnit.Pixel))
+                            using (StringFormat sf = new StringFormat())
+                            {
+                                sf.Alignment = StringAlignment.Center; sf.LineAlignment = StringAlignment.Center;
+                                g.DrawString("?", qf, br, new RectangleF(a.X, a.Y + a.Height * .04f, a.Width, a.Height), sf);
+                            }
+                        }
                         break;
                     case "disk":
                         g.DrawRectangle(pen, r.X + r.Width * .16f, r.Y + r.Height * .1f, r.Width * .68f, r.Height * .8f);

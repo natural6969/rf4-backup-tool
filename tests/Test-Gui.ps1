@@ -29,7 +29,8 @@ $fxShots = Join-Path $me 'Documents\Russian Fishing 4\Screenshots'; New-Item -It
 $shotsOut = if ($ShotDir) { $ShotDir } else { Join-Path $PSScriptRoot 'shots' }; if (-not $NoShots) { New-Item -ItemType Directory -Force -Path $shotsOut | Out-Null }
 
 try {
-    . (Join-Path $root 'rf4sa-backup-gui.ps1') -Lang de
+    $ver = [regex]::Match([IO.File]::ReadAllText((Join-Path $root 'src\core.ps1')), "ToolVersion = '([\d\.]+)'").Groups[1].Value
+    . (Join-Path $root "rf4sa-backup-gui-v$ver.ps1") -Lang de
     $script:RealShowMsg = ${function:Show-Msg}     # Original merken (Regressionstest: der echte Dialog)
     $dialogs = New-Object System.Collections.Generic.List[string]
     function Show-Msg([string]$Text, [string]$Kind = 'Warning', [string]$Buttons = 'OK') { $dialogs.Add($Text); if ($Buttons -eq 'YesNo') { return 'Yes' } return 'OK' }

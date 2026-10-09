@@ -16,6 +16,7 @@ if (-not ('Rf4Ui.UButton' -as [type])) {
     Add-Type -TypeDefinition ([IO.File]::ReadAllText($uiPath, [Text.Encoding]::UTF8)) -ReferencedAssemblies System.Windows.Forms, System.Drawing
 }
 [Rf4Ui.Native]::EnableDpi()
+[Rf4Ui.Native]::HideConsole()
 [Rf4Ui.WheelFilter]::Install()
 # ── Globaler Fehlerfänger: Fehler in Ereignissen führen nicht mehr zum .NET-Absturzdialog ──
 function Write-ErrorLog([string]$msg) {
@@ -198,7 +199,7 @@ $script:btnPrimary.Add_Click({ if ($script:PrimaryAction) { & $script:PrimaryAct
 $script:state = @{ Installs = $null; Action = ''; Render = $null; Step = 0; LastOpen = ''; Busy = $false; ResultKey = '' }
 $script:RunLog = New-Object System.Text.StringBuilder
 $script:L = @()                                   # Layout-Einträge des aktuellen Panels
-foreach ($n in @('lblCur', 'BackAction', 'PrimaryAction', 'ExtraAction', 'headLang', 'headTheme', 'bkAcct', 'bkAcctItems', 'rsCurrent', 'statCtls', 'tbDetails', 'dlgResult', 'cmbDirty')) { Set-Variable -Name $n -Value $null -Scope Script }
+foreach ($n in @('lblCur', 'BackAction', 'PrimaryAction', 'ExtraAction', 'headHelp', 'headLang', 'headTheme', 'bkAcct', 'bkAcctItems', 'rsCurrent', 'statCtls', 'tbDetails', 'dlgResult', 'cmbDirty')) { Set-Variable -Name $n -Value $null -Scope Script }
 $script:bkAcctValue = ''
 $script:inLayout = $false
 $script:Tip = New-Object System.Windows.Forms.ToolTip
@@ -214,7 +215,11 @@ function Build-Header {
     $script:lblSub.Font = $script:F.small; $script:lblSub.ForeColor = $script:Col.muted; $script:lblSub.Text = 'v' + $script:ToolVersion + '  ·  '
     $script:lblDonate.Font = New-Object System.Drawing.Font($script:F.small, [System.Drawing.FontStyle]::Underline); $script:lblDonate.ForeColor = $script:Col.accent; $script:lblDonate.Text = T 'donate'
     $script:Tip.SetToolTip($script:lblDonate, 'https://paypal.me/bjoernoppermann')
-    foreach ($b in @($script:headLang, $script:headTheme)) { if ($b) { $script:pHeader.Controls.Remove($b); $b.Dispose() } }
+    foreach ($b in @($script:headHelp, $script:headLang, $script:headTheme)) { if ($b) { $script:pHeader.Controls.Remove($b); $b.Dispose() } }
+    # Hilfe: Anleitung in der aktuellen Sprache öffnen
+    $script:headHelp = New-Btn (T 'help_btn') 'secondary' 'help'
+    $script:headHelp.Add_Click({ Open-Guide })
+    $script:Tip.SetToolTip($script:headHelp, (T 'tip_help'))
     # Sprache
     $langItems = @($script:Langs | ForEach-Object { @{ text = $script:LangNames[$_]; value = $_ } })
     $script:headLang = New-Dropdown $script:LangNames[$script:Lang] 'globe' $langItems $script:Lang { param($v) Set-Language $v }
@@ -225,7 +230,7 @@ function Build-Header {
     $label = if ($script:ThemeChoice -eq 'auto') { T 'theme_auto' } else { Get-ThemeName $script:ThemeCode }
     $script:headTheme = New-Dropdown $label $icon $items $script:ThemeChoice { param($v) Set-ThemeChoice $v }
     $script:Tip.SetToolTip($script:headTheme, (T 'tip_theme'))
-    $script:pHeader.Controls.AddRange(@($script:headLang, $script:headTheme))
+    $script:pHeader.Controls.AddRange(@($script:headHelp, $script:headLang, $script:headTheme))
     Position-Header
     $script:stepper.Current = $script:state.Step; $script:stepper.Invalidate()
     try { if ($script:pContent.IsHandleCreated) { [Rf4Ui.Native]::DarkScroll($script:pContent.Handle, [Rf4Ui.UiTheme]::Dark) } } catch { }
@@ -242,6 +247,7 @@ function Position-Header {
     $h = $script:headLang.Height; $y = [int](($script:pHeader.Height - $h) / 2)
     $script:headTheme.Location = New-Object System.Drawing.Point(($w - $pad - $script:headTheme.Width), $y)
     $script:headLang.Location = New-Object System.Drawing.Point(($script:headTheme.Left - (S 10) - $script:headLang.Width), $y)
+    $script:headHelp.Location = New-Object System.Drawing.Point(($script:headLang.Left - (S 10) - $script:headHelp.Width), $y)
 }
 function Position-Footer {
     $pad = (S 24); $w = $script:pFooter.ClientSize.Width; $y = [int](($script:pFooter.Height - $script:btnPrimary.Height) / 2)
@@ -515,7 +521,7 @@ function Render-Restore {
     [void](Add-Label (T 'existing_backups') $script:F.bold $script:Col.text 6)
     $script:rsBackups = @(Find-Backups); $script:rsExtra = $null
     $lb = New-Cards 'one' (S 136); $script:lstBk = $lb
-    foreach ($b in $script:rsBackups) { [void]$lb.Add($b.Name, (Format-BackupCard $b), '', 'muted', 'disk', $b) }
+    foreach ($b in $script:rsBackups) { [void]$lb.Add($b.Name, (Format-BackupCard $b), $(if ($b.IsSync) { T 'bk_badge_sync' } else { '' }), 'accent', 'disk', $b) }
     if ($script:rsBackups.Count -eq 0) { $lb.Visible = $true }
     Add-Fixed $lb ([Math]::Min(2, [Math]::Max(1, $script:rsBackups.Count)) * 144 + 4) 8
     $script:lblNoBk = Add-Label $(if ($script:rsBackups.Count -eq 0) { T 'no_existing_backups' } else { '' }) $script:F.small $script:Col.muted 8
@@ -540,12 +546,14 @@ function Render-Restore {
     }
     $lb.add_SelectionChanged({ $ix = $script:lstBk.SelectedIndex; if ($ix -ge 0) { & $script:applyBackup $script:rsBackups[$ix] } })
     $script:btnOtherBk.Add_Click({
-        $p = Pick-Folder (Get-DefaultBackupDir) (T 'pick_backup_d'); if (-not $p) { return }
-        if (-not (Test-LooksLikeBackup $p)) { [void](Show-Msg (T 'no_backup_here')); return }
-        $bk = Get-BackupEntry $p
-        $script:rsBackups = @($bk) + @($script:rsBackups)
-        $card = $script:lstBk.Add($bk.Name, (Format-BackupCard $bk), '', 'muted', 'disk', $bk)
-        # neue Karte an den Anfang der Reihenfolge ist nicht nötig – einfach auswählen
+        $start = if (Get-SyncPath) { Get-SyncPath } else { Get-DefaultBackupDir }
+        $p = Pick-Folder $start (T 'pick_backup_d'); if (-not $p) { return }
+        $rp = Resolve-BackupPath $p     # nimmt auch den übergeordneten Ordner eines RF4_Sync-Ordners (Netzwerk/NAS)
+        if (-not $rp) { [void](Show-Msg ((T 'restore_path_bad') + "`n`n" + $p)); return }
+        $dupe = [Array]::FindIndex($script:lstBk.Cards.ToArray(), [Predicate[object]] { param($c) $c.Tag2.Path -eq $rp })
+        if ($dupe -ge 0) { $script:lstBk.SelectedIndex = $dupe; return }
+        $bk = Get-BackupEntry $rp
+        [void]$script:lstBk.Add($bk.Name, (Format-BackupCard $bk), $(if ($bk.IsSync) { T 'bk_badge_sync' } else { '' }), 'accent', 'disk', $bk)
         $script:lstBk.SelectedIndex = $script:lstBk.Cards.Count - 1
         $script:rsBackups = @($script:lstBk.Cards | ForEach-Object { $_.Tag2 })
         $script:lblNoBk.Text = ''; Do-Layout

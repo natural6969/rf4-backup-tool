@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Tests für rf4sa-backup.sh – laufen komplett in einem Temp-Verzeichnis mit eigenem $HOME.
+# Tests für rf4sa-backup-v<Version>.sh – laufen komplett in einem Temp-Verzeichnis mit eigenem $HOME.
 # Aufruf: bash tests/test-sh.sh        (benötigt bash >= 4 und python3)
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT="$HERE/../rf4sa-backup.sh"
+SCRIPT="$(ls "$HERE"/../rf4sa-backup-v*.sh | head -1)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"; mkdir -p "$HOME"
 export XDG_CONFIG_HOME="$HOME/.config"

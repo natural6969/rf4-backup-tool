@@ -130,6 +130,22 @@ function Get-ThemeColors([string]$code) {
     return $out
 }
 
+# ── Hilfe: Anleitung in der Sprache des Programms öffnen ──────────────────────
+function Get-GuideCode { if (@('de', 'en', 'zh', 'ru') -contains $script:Lang) { return $script:Lang } else { return 'en' } }
+function Get-GuidePath {
+    $code = Get-GuideCode
+    foreach ($dir in @($PSScriptRoot, $(if ($PSScriptRoot) { Join-Path $PSScriptRoot '..' }))) {
+        if (-not $dir) { continue }
+        $p = Join-Path $dir "docs\guide.$code.html"
+        if (Test-Path -LiteralPath $p) { return (Resolve-Path -LiteralPath $p).Path }
+    }
+    return $null
+}
+function Get-GuideUrl {
+    $code = Get-GuideCode; $suffix = $(if ($code -eq 'de') { '' } else { ".$code" })
+    return "https://codeberg.org/Natural78/rf4-backup-tool/src/branch/main/README$suffix.md"
+}
+function Open-Guide { $p = Get-GuidePath; try { if ($p) { Start-Process -FilePath $p } else { Start-Process (Get-GuideUrl) } } catch { } }
 # ── Konfiguration (Sprache, Theme, Sync-Ordner, Backup-Ordner) ─────────────────
 function Get-ConfigDir  { Join-Path $env:APPDATA 'rf4-backup' }
 function Get-ConfigFile { Join-Path (Get-ConfigDir) 'settings.json' }
@@ -534,6 +550,7 @@ function Get-BackupSourceLabel($info) {
     return (T 'bk_source' @($s))
 }
 function Format-BackupDates($bk) {
+    if ($bk.PSObject.Properties['IsSync'] -and $bk.IsSync) { return (T 'bk_sync_hint') }
     $c = if ($bk.Created) { $bk.Created } else { '?' }; $u = if ($bk.Updated) { $bk.Updated } else { $bk.Time.ToString('yyyy-MM-dd HH:mm') }
     return (T 'bk_dates' @($c, $u))
 }
@@ -544,15 +561,43 @@ function Get-BackupEntry([string]$c) {
     foreach ($fi in $files) { $size += $fi.Length; if ($fi.LastWriteTime -gt $latest) { $latest = $fi.LastWriteTime } }
     $convs = 0; foreach ($m in $bc.Mailboxes) { $convs += $m.Convs }
     $inf = Read-BackupInfo $c
+    $isSync = ((Split-Path $c -Leaf) -eq 'RF4_Sync')
+    $label = Get-BackupSourceLabel $inf; $upd = $(if ($inf) { $inf.Updated } else { '' })
+    if ($isSync -and -not $inf) {
+        $sl = Get-SyncLogInfo $c
+        $label = if ($sl) { T 'bk_source_sync' @($sl.Host, $sl.Time) } else { T 'bk_source_sync_unknown' }
+        if ($sl) { $upd = $sl.Time }
+    }
     return [pscustomobject]@{ Path = $c; Name = (Split-Path $c -Leaf); Time = $latest; SizeBytes = $size; Mailboxes = $bc.Mailboxes.Count; Convs = $convs; Files = $bc.Files; Shots = $bc.Shots
-        Info = $inf; Created = $(if ($inf) { $inf.Created } else { '' }); Updated = $(if ($inf) { $inf.Updated } else { '' }); SourceLabel = (Get-BackupSourceLabel $inf) }
+        Info = $inf; Created = $(if ($inf) { $inf.Created } else { '' }); Updated = $upd; SourceLabel = $label; IsSync = $isSync }
 }
 # Mehrzeiliger Beschreibungstext eines Backups (für Karten/Menüs)
 function Format-BackupCard($bk) { return ($bk.Path + "`n" + $bk.SourceLabel + "`n" + (Format-BackupInfo $bk) + "`n" + (Format-BackupDates $bk)) }
+# Akzeptiert auch den ÜBERGEORDNETEN Ordner eines Sync-Ordners (…\RF4_Sync): liefert den Pfad, aus dem wiederhergestellt werden kann, sonst $null
+function Resolve-BackupPath([string]$p) {
+    if ([string]::IsNullOrWhiteSpace($p)) { return $null }
+    if (Test-LooksLikeBackup $p) { return $p }
+    $s = Join-Path $p 'RF4_Sync'
+    if (Test-LooksLikeBackup $s) { return $s }
+    return $null
+}
+# letzte Zeile von .sync_log: "2026-10-09T09:01:08Z HOSTNAME"
+function Get-SyncLogInfo([string]$dir) {
+    $f = Join-Path $dir '.sync_log'
+    if (-not (Test-Path -LiteralPath $f)) { return $null }
+    try {
+        $last = @(Get-Content -LiteralPath $f -ErrorAction Stop | Where-Object { $_.Trim() } | Select-Object -Last 1)[0]
+        $m = [regex]::Match([string]$last, '^(\S+)\s+(.*)$')
+        if (-not $m.Success) { return $null }
+        $dt = [datetime]::MinValue; [void][datetime]::TryParse($m.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal -bor [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$dt)
+        return [pscustomobject]@{ Host = $m.Groups[2].Value.Trim(); Time = $(if ($dt -ne [datetime]::MinValue) { $dt.ToLocalTime().ToString('yyyy-MM-dd HH:mm') } else { $m.Groups[1].Value }) }
+    } catch { return $null }
+}
 function Find-Backups {
     $bases = New-Object System.Collections.Generic.List[string]
     $bases.Add((Get-DefaultBackupDir))
     foreach ($d in @((Get-Config).backupDirs)) { if ($d) { $bases.Add($d) } }
+    $sp = Get-SyncPath; if ($sp) { try { if (Test-Path -LiteralPath $sp -PathType Container) { $bases.Add($sp) } } catch { } }
     foreach ($x in @(([string]$env:RF4_BACKUP_DIRS) -split ';' | Where-Object { $_ })) { $bases.Add($x) }
     $seen = New-Object 'System.Collections.Generic.HashSet[string]'
     $found = New-Object System.Collections.Generic.List[object]

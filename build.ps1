@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 # Baut die ausgelieferten Einzeldateien aus src\ (UTF-8 mit BOM, damit PS 5.1 Kyrillisch/Chinesisch korrekt liest).
-#   src\core.ps1 + src\lang\*.lang + src\themes\*.theme  ->  eingebettet in rf4sa-backup.ps1 und rf4sa-backup-gui.ps1
+#   src\core.ps1 + src\lang\*.lang + src\themes\*.theme  ->  eingebettet in rf4sa-backup-v<Version>.ps1 und rf4sa-backup-gui-v<Version>.ps1
 #   src\ui.cs                                              ->  eingebettet in rf4sa-backup-gui.ps1
 #   src\cli.sh + Sprachtabelle                             ->  rf4sa-backup.sh
 $root = $PSScriptRoot
@@ -45,13 +45,13 @@ $ErrorActionPreference = 'Stop'
 function Head($kind) { $tpl.Replace('@@KIND@@', $kind).Replace('@@VER@@', $ver).Replace('@@DATE@@', $date) }
 
 $cli = (Head 'Terminal') + $core + "`r`n" + (ReadSrc 'src\cli.ps1')
-[IO.File]::WriteAllText((Join-Path $root 'rf4sa-backup.ps1'), $cli, $enc)
+[IO.File]::WriteAllText((Join-Path $root "rf4sa-backup-v$ver.ps1"), $cli, $enc)
 
 if (Test-Path (Join-Path $root 'src\gui.ps1')) {
     $ui = (ReadSrc 'src\ui.cs').Replace("`r`n", "`n")
     $uiBlock = "`$script:UiCsSource = @'`n" + $ui.TrimEnd("`n") + "`n'@`nAdd-Type -TypeDefinition `$script:UiCsSource -ReferencedAssemblies System.Windows.Forms, System.Drawing`n"
     $gui = (Head 'GUI') + $core + "`r`n" + (ReadSrc 'src\gui.ps1').Replace('# @@UICS@@', $uiBlock)
-    [IO.File]::WriteAllText((Join-Path $root 'rf4sa-backup-gui.ps1'), $gui, $enc)
+    [IO.File]::WriteAllText((Join-Path $root "rf4sa-backup-gui-v$ver.ps1"), $gui, $enc)
 }
 
 # ── Linux/macOS-Skript: Sprachtabelle aus den .lang-Dateien ─────────────────────
@@ -72,7 +72,7 @@ if (Test-Path $shSrc) {
         }
     }
     $sh = (ReadSrc 'src\cli.sh').Replace("`r`n", "`n").Replace('# @@STRINGS@@', $sb.ToString().TrimEnd("`n")).Replace('@@VERSION@@', $ver).Replace('@@DATE@@', $date)
-    [IO.File]::WriteAllText((Join-Path $root 'rf4sa-backup.sh'), $sh, (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText((Join-Path $root "rf4sa-backup-v$ver.sh"), $sh, (New-Object Text.UTF8Encoding($false)))
 }
 
 # ── Anleitung als HTML (aus den READMEs; für Installer/Startmenü, mit Screenshots + klickbaren Links) ──────────
@@ -141,4 +141,6 @@ if (Test-Path (Join-Path $root 'README.md')) {
         if (Test-Path $mdFile) { [IO.File]::WriteAllText((Join-Path $docsDir "guide.$($pair[0]).html"), (ConvertTo-GuideHtml ([IO.File]::ReadAllText($mdFile, [Text.Encoding]::UTF8)) $pair[0] $pair[0]), (New-Object Text.UTF8Encoding($false))) }
     }
 }
+# Alte Ausgaben (ohne Version oder frühere Versionen) entfernen – es gibt immer genau eine Datei je Variante
+foreach ($f in @(Get-ChildItem $root -File | Where-Object { $_.Name -match '^rf4sa-backup(-gui)?(-v[\d\.]+)?\.(ps1|sh)$' })) { if ($f.Name -notmatch [regex]::Escape("-v$ver.")) { [IO.File]::Delete($f.FullName) } }
 Write-Host "Gebaut: v$ver"

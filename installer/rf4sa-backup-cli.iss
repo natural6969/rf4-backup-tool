@@ -31,17 +31,26 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
+[InstallDelete]
+; ältere Programmdateien (ohne Version / frühere Versionen) beim Update entfernen
+Type: files; Name: "{app}\rf4sa-backup-gui.ps1"
+Type: files; Name: "{app}\rf4sa-backup-gui-v*.ps1"
+Type: files; Name: "{app}\rf4sa-backup.ps1"
+Type: files; Name: "{app}\rf4sa-backup-v*.ps1"
+Type: files; Name: "{app}\rf4sa-backup.sh"
+Type: files; Name: "{app}\rf4sa-backup-v*.sh"
+
 [Files]
 Source: "../examples/*"; DestDir: "{app}\examples"; Flags: ignoreversion
-Source: "../rf4sa-backup.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "../rf4sa-backup-v{#AppVersion}.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "../LICENSE";           DestDir: "{app}"; Flags: ignoreversion
 Source: "README.txt";        DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\RF4 Backup Tool (Terminal)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup.ps1'"""; WorkingDir: "{app}"; Comment: "RF4 Savegame Backup - Terminal"
-Name: "{autodesktop}\RF4 Backup Tool (Terminal)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup.ps1'"""; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\RF4 Backup Tool (Terminal)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup-v{#AppVersion}.ps1'"""; WorkingDir: "{app}"; Comment: "RF4 Savegame Backup - Terminal"
+Name: "{autodesktop}\RF4 Backup Tool (Terminal)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup-v{#AppVersion}.ps1'"""; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup.ps1'"""; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup-v{#AppVersion}.ps1'"""; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 #include "common.iss"

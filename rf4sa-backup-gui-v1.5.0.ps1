@@ -341,6 +341,14 @@ bk_source_unknown=Quelle: unbekannt (Backup ohne Info-Datei)
 bk_from_pc=(PC {0})
 bk_dates=Erstellt: {0}   ·   Aktualisiert: {1}
 bk_existing_here=Hier liegt schon ein Backup. {0}
+bk_source_sync=Quelle: gemeinsamer Sync-Ordner – zuletzt abgeglichen von PC {0} am {1}
+bk_source_sync_unknown=Quelle: gemeinsamer Sync-Ordner (noch keine Sync-Einträge)
+bk_sync_hint=Gemeinsamer Ordner aller Geräte – Restore holt den abgeglichenen Stand von dort.
+bk_badge_sync=Sync
+menu_help=Hilfe / Anleitung
+help_btn=Hilfe
+tip_help=Anleitung mit Screenshots in deiner Sprache öffnen
+restore_path_bad=Dort wurde kein Backup gefunden (auch nicht im Unterordner RF4_Sync). Ordner nicht erreichbar?
 @@FILE lang/en.lang
 # RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
 # Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
@@ -584,6 +592,14 @@ bk_source_unknown=Source: unknown (backup without info file)
 bk_from_pc=(PC {0})
 bk_dates=Created: {0}   ·   Updated: {1}
 bk_existing_here=There is already a backup here. {0}
+bk_source_sync=Source: shared sync folder – last synced by PC {0} on {1}
+bk_source_sync_unknown=Source: shared sync folder (no sync entries yet)
+bk_sync_hint=Shared folder of all devices – restore pulls the synced state from here.
+bk_badge_sync=Sync
+menu_help=Help / guide
+help_btn=Help
+tip_help=Open the guide with screenshots in your language
+restore_path_bad=No backup found there (not in a RF4_Sync subfolder either). Folder not reachable?
 @@FILE lang/ru.lang
 # RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
 # Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
@@ -827,6 +843,14 @@ bk_source_unknown=Источник: неизвестен (копия без ин
 bk_from_pc=(ПК {0})
 bk_dates=Создана: {0}   ·   Обновлена: {1}
 bk_existing_here=Здесь уже есть копия. {0}
+bk_source_sync=Источник: общая папка синхронизации – последний раз синхронизировал ПК {0}, {1}
+bk_source_sync_unknown=Источник: общая папка синхронизации (записей синхронизации пока нет)
+bk_sync_hint=Общая папка всех устройств — восстановление берёт отсюда синхронизированное состояние.
+bk_badge_sync=Sync
+menu_help=Справка / руководство
+help_btn=Справка
+tip_help=Открыть руководство со скриншотами на вашем языке
+restore_path_bad=Там не найдена резервная копия (в подпапке RF4_Sync тоже). Папка недоступна?
 @@FILE lang/zh.lang
 # RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
 # Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
@@ -1070,6 +1094,14 @@ bk_source_unknown=来源: 未知（备份没有信息文件）
 bk_from_pc=（电脑 {0}）
 bk_dates=创建: {0}   ·   更新: {1}
 bk_existing_here=此处已有备份。{0}
+bk_source_sync=来源: 共享同步文件夹 – 最后由电脑 {0} 于 {1} 同步
+bk_source_sync_unknown=来源: 共享同步文件夹（尚无同步记录）
+bk_sync_hint=所有设备共用的文件夹——恢复会从这里取回已同步的内容。
+bk_badge_sync=同步
+menu_help=帮助 / 指南
+help_btn=帮助
+tip_help=用您的语言打开带截图的指南
+restore_path_bad=在那里没有找到备份（RF4_Sync 子文件夹中也没有）。文件夹无法访问？
 @@FILE themes/dark.theme
 # RF4 Backup Tool - Theme. Eigene Themes: Datei in themes\ (neben dem Skript) oder %APPDATA%\rf4-backup\themes\ ablegen.
 # @base = dark|light  (welcher Windows-Modus dieses Theme bei 'Automatisch' ersetzt)
@@ -1163,6 +1195,22 @@ function Get-ThemeColors([string]$code) {
     return $out
 }
 
+# ── Hilfe: Anleitung in der Sprache des Programms öffnen ──────────────────────
+function Get-GuideCode { if (@('de', 'en', 'zh', 'ru') -contains $script:Lang) { return $script:Lang } else { return 'en' } }
+function Get-GuidePath {
+    $code = Get-GuideCode
+    foreach ($dir in @($PSScriptRoot, $(if ($PSScriptRoot) { Join-Path $PSScriptRoot '..' }))) {
+        if (-not $dir) { continue }
+        $p = Join-Path $dir "docs\guide.$code.html"
+        if (Test-Path -LiteralPath $p) { return (Resolve-Path -LiteralPath $p).Path }
+    }
+    return $null
+}
+function Get-GuideUrl {
+    $code = Get-GuideCode; $suffix = $(if ($code -eq 'de') { '' } else { ".$code" })
+    return "https://codeberg.org/Natural78/rf4-backup-tool/src/branch/main/README$suffix.md"
+}
+function Open-Guide { $p = Get-GuidePath; try { if ($p) { Start-Process -FilePath $p } else { Start-Process (Get-GuideUrl) } } catch { } }
 # ── Konfiguration (Sprache, Theme, Sync-Ordner, Backup-Ordner) ─────────────────
 function Get-ConfigDir  { Join-Path $env:APPDATA 'rf4-backup' }
 function Get-ConfigFile { Join-Path (Get-ConfigDir) 'settings.json' }
@@ -1567,6 +1615,7 @@ function Get-BackupSourceLabel($info) {
     return (T 'bk_source' @($s))
 }
 function Format-BackupDates($bk) {
+    if ($bk.PSObject.Properties['IsSync'] -and $bk.IsSync) { return (T 'bk_sync_hint') }
     $c = if ($bk.Created) { $bk.Created } else { '?' }; $u = if ($bk.Updated) { $bk.Updated } else { $bk.Time.ToString('yyyy-MM-dd HH:mm') }
     return (T 'bk_dates' @($c, $u))
 }
@@ -1577,15 +1626,43 @@ function Get-BackupEntry([string]$c) {
     foreach ($fi in $files) { $size += $fi.Length; if ($fi.LastWriteTime -gt $latest) { $latest = $fi.LastWriteTime } }
     $convs = 0; foreach ($m in $bc.Mailboxes) { $convs += $m.Convs }
     $inf = Read-BackupInfo $c
+    $isSync = ((Split-Path $c -Leaf) -eq 'RF4_Sync')
+    $label = Get-BackupSourceLabel $inf; $upd = $(if ($inf) { $inf.Updated } else { '' })
+    if ($isSync -and -not $inf) {
+        $sl = Get-SyncLogInfo $c
+        $label = if ($sl) { T 'bk_source_sync' @($sl.Host, $sl.Time) } else { T 'bk_source_sync_unknown' }
+        if ($sl) { $upd = $sl.Time }
+    }
     return [pscustomobject]@{ Path = $c; Name = (Split-Path $c -Leaf); Time = $latest; SizeBytes = $size; Mailboxes = $bc.Mailboxes.Count; Convs = $convs; Files = $bc.Files; Shots = $bc.Shots
-        Info = $inf; Created = $(if ($inf) { $inf.Created } else { '' }); Updated = $(if ($inf) { $inf.Updated } else { '' }); SourceLabel = (Get-BackupSourceLabel $inf) }
+        Info = $inf; Created = $(if ($inf) { $inf.Created } else { '' }); Updated = $upd; SourceLabel = $label; IsSync = $isSync }
 }
 # Mehrzeiliger Beschreibungstext eines Backups (für Karten/Menüs)
 function Format-BackupCard($bk) { return ($bk.Path + "`n" + $bk.SourceLabel + "`n" + (Format-BackupInfo $bk) + "`n" + (Format-BackupDates $bk)) }
+# Akzeptiert auch den ÜBERGEORDNETEN Ordner eines Sync-Ordners (…\RF4_Sync): liefert den Pfad, aus dem wiederhergestellt werden kann, sonst $null
+function Resolve-BackupPath([string]$p) {
+    if ([string]::IsNullOrWhiteSpace($p)) { return $null }
+    if (Test-LooksLikeBackup $p) { return $p }
+    $s = Join-Path $p 'RF4_Sync'
+    if (Test-LooksLikeBackup $s) { return $s }
+    return $null
+}
+# letzte Zeile von .sync_log: "2026-10-09T09:01:08Z HOSTNAME"
+function Get-SyncLogInfo([string]$dir) {
+    $f = Join-Path $dir '.sync_log'
+    if (-not (Test-Path -LiteralPath $f)) { return $null }
+    try {
+        $last = @(Get-Content -LiteralPath $f -ErrorAction Stop | Where-Object { $_.Trim() } | Select-Object -Last 1)[0]
+        $m = [regex]::Match([string]$last, '^(\S+)\s+(.*)$')
+        if (-not $m.Success) { return $null }
+        $dt = [datetime]::MinValue; [void][datetime]::TryParse($m.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal -bor [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$dt)
+        return [pscustomobject]@{ Host = $m.Groups[2].Value.Trim(); Time = $(if ($dt -ne [datetime]::MinValue) { $dt.ToLocalTime().ToString('yyyy-MM-dd HH:mm') } else { $m.Groups[1].Value }) }
+    } catch { return $null }
+}
 function Find-Backups {
     $bases = New-Object System.Collections.Generic.List[string]
     $bases.Add((Get-DefaultBackupDir))
     foreach ($d in @((Get-Config).backupDirs)) { if ($d) { $bases.Add($d) } }
+    $sp = Get-SyncPath; if ($sp) { try { if (Test-Path -LiteralPath $sp -PathType Container) { $bases.Add($sp) } } catch { } }
     foreach ($x in @(([string]$env:RF4_BACKUP_DIRS) -split ';' | Where-Object { $_ })) { $bases.Add($x) }
     $seen = New-Object 'System.Collections.Generic.HashSet[string]'
     $found = New-Object System.Collections.Generic.List[object]
@@ -1747,6 +1824,14 @@ namespace Rf4Ui
         // dunkle bzw. helle Scrollbars (Win10 1809+)
         public static void DarkScroll(IntPtr h, bool dark) { try { SetWindowTheme(h, dark ? "DarkMode_Explorer" : "Explorer", null); } catch { } }
 
+        [DllImport("kernel32.dll")] static extern IntPtr GetConsoleWindow();
+        [DllImport("kernel32.dll")] static extern uint GetConsoleProcessList(uint[] list, uint count);
+        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+        // Konsolenfenster ausblenden, aber nur wenn es dem Programm allein gehoert (Doppelklick/Rechtsklick), nicht bei Start aus einem Terminal
+        public static void HideConsole()
+        {
+            try { IntPtr h = GetConsoleWindow(); if (h != IntPtr.Zero && GetConsoleProcessList(new uint[4], 4) <= 1) ShowWindow(h, 0); } catch { }
+        }
         public static void EnableDpi()
         {
             try { if (!SetProcessDpiAwarenessContext(new IntPtr(-4))) SetProcessDPIAware(); }
@@ -1865,6 +1950,18 @@ namespace Rf4Ui
                         break;
                     case "folder":
                         g.DrawLines(pen, new PointF[] { P(r, .1f, .26f), P(r, .1f, .8f), P(r, .9f, .8f), P(r, .9f, .34f), P(r, .46f, .34f), P(r, .38f, .22f), P(r, .1f, .22f), P(r, .1f, .26f) });
+                        break;
+                    case "help":
+                        {
+                            RectangleF a = new RectangleF(r.X + r.Width * .1f, r.Y + r.Height * .1f, r.Width * .8f, r.Height * .8f);
+                            g.DrawEllipse(pen, a);
+                            using (Font qf = new Font("Segoe UI", Math.Max(6f, r.Height * .5f), FontStyle.Bold, GraphicsUnit.Pixel))
+                            using (StringFormat sf = new StringFormat())
+                            {
+                                sf.Alignment = StringAlignment.Center; sf.LineAlignment = StringAlignment.Center;
+                                g.DrawString("?", qf, br, new RectangleF(a.X, a.Y + a.Height * .04f, a.Width, a.Height), sf);
+                            }
+                        }
                         break;
                     case "disk":
                         g.DrawRectangle(pen, r.X + r.Width * .16f, r.Y + r.Height * .1f, r.Width * .68f, r.Height * .8f);
@@ -2391,6 +2488,7 @@ if (-not ('Rf4Ui.UButton' -as [type])) {
     Add-Type -TypeDefinition ([IO.File]::ReadAllText($uiPath, [Text.Encoding]::UTF8)) -ReferencedAssemblies System.Windows.Forms, System.Drawing
 }
 [Rf4Ui.Native]::EnableDpi()
+[Rf4Ui.Native]::HideConsole()
 [Rf4Ui.WheelFilter]::Install()
 # ── Globaler Fehlerfänger: Fehler in Ereignissen führen nicht mehr zum .NET-Absturzdialog ──
 function Write-ErrorLog([string]$msg) {
@@ -2573,7 +2671,7 @@ $script:btnPrimary.Add_Click({ if ($script:PrimaryAction) { & $script:PrimaryAct
 $script:state = @{ Installs = $null; Action = ''; Render = $null; Step = 0; LastOpen = ''; Busy = $false; ResultKey = '' }
 $script:RunLog = New-Object System.Text.StringBuilder
 $script:L = @()                                   # Layout-Einträge des aktuellen Panels
-foreach ($n in @('lblCur', 'BackAction', 'PrimaryAction', 'ExtraAction', 'headLang', 'headTheme', 'bkAcct', 'bkAcctItems', 'rsCurrent', 'statCtls', 'tbDetails', 'dlgResult', 'cmbDirty')) { Set-Variable -Name $n -Value $null -Scope Script }
+foreach ($n in @('lblCur', 'BackAction', 'PrimaryAction', 'ExtraAction', 'headHelp', 'headLang', 'headTheme', 'bkAcct', 'bkAcctItems', 'rsCurrent', 'statCtls', 'tbDetails', 'dlgResult', 'cmbDirty')) { Set-Variable -Name $n -Value $null -Scope Script }
 $script:bkAcctValue = ''
 $script:inLayout = $false
 $script:Tip = New-Object System.Windows.Forms.ToolTip
@@ -2589,7 +2687,11 @@ function Build-Header {
     $script:lblSub.Font = $script:F.small; $script:lblSub.ForeColor = $script:Col.muted; $script:lblSub.Text = 'v' + $script:ToolVersion + '  ·  '
     $script:lblDonate.Font = New-Object System.Drawing.Font($script:F.small, [System.Drawing.FontStyle]::Underline); $script:lblDonate.ForeColor = $script:Col.accent; $script:lblDonate.Text = T 'donate'
     $script:Tip.SetToolTip($script:lblDonate, 'https://paypal.me/bjoernoppermann')
-    foreach ($b in @($script:headLang, $script:headTheme)) { if ($b) { $script:pHeader.Controls.Remove($b); $b.Dispose() } }
+    foreach ($b in @($script:headHelp, $script:headLang, $script:headTheme)) { if ($b) { $script:pHeader.Controls.Remove($b); $b.Dispose() } }
+    # Hilfe: Anleitung in der aktuellen Sprache öffnen
+    $script:headHelp = New-Btn (T 'help_btn') 'secondary' 'help'
+    $script:headHelp.Add_Click({ Open-Guide })
+    $script:Tip.SetToolTip($script:headHelp, (T 'tip_help'))
     # Sprache
     $langItems = @($script:Langs | ForEach-Object { @{ text = $script:LangNames[$_]; value = $_ } })
     $script:headLang = New-Dropdown $script:LangNames[$script:Lang] 'globe' $langItems $script:Lang { param($v) Set-Language $v }
@@ -2600,7 +2702,7 @@ function Build-Header {
     $label = if ($script:ThemeChoice -eq 'auto') { T 'theme_auto' } else { Get-ThemeName $script:ThemeCode }
     $script:headTheme = New-Dropdown $label $icon $items $script:ThemeChoice { param($v) Set-ThemeChoice $v }
     $script:Tip.SetToolTip($script:headTheme, (T 'tip_theme'))
-    $script:pHeader.Controls.AddRange(@($script:headLang, $script:headTheme))
+    $script:pHeader.Controls.AddRange(@($script:headHelp, $script:headLang, $script:headTheme))
     Position-Header
     $script:stepper.Current = $script:state.Step; $script:stepper.Invalidate()
     try { if ($script:pContent.IsHandleCreated) { [Rf4Ui.Native]::DarkScroll($script:pContent.Handle, [Rf4Ui.UiTheme]::Dark) } } catch { }
@@ -2617,6 +2719,7 @@ function Position-Header {
     $h = $script:headLang.Height; $y = [int](($script:pHeader.Height - $h) / 2)
     $script:headTheme.Location = New-Object System.Drawing.Point(($w - $pad - $script:headTheme.Width), $y)
     $script:headLang.Location = New-Object System.Drawing.Point(($script:headTheme.Left - (S 10) - $script:headLang.Width), $y)
+    $script:headHelp.Location = New-Object System.Drawing.Point(($script:headLang.Left - (S 10) - $script:headHelp.Width), $y)
 }
 function Position-Footer {
     $pad = (S 24); $w = $script:pFooter.ClientSize.Width; $y = [int](($script:pFooter.Height - $script:btnPrimary.Height) / 2)
@@ -2890,7 +2993,7 @@ function Render-Restore {
     [void](Add-Label (T 'existing_backups') $script:F.bold $script:Col.text 6)
     $script:rsBackups = @(Find-Backups); $script:rsExtra = $null
     $lb = New-Cards 'one' (S 136); $script:lstBk = $lb
-    foreach ($b in $script:rsBackups) { [void]$lb.Add($b.Name, (Format-BackupCard $b), '', 'muted', 'disk', $b) }
+    foreach ($b in $script:rsBackups) { [void]$lb.Add($b.Name, (Format-BackupCard $b), $(if ($b.IsSync) { T 'bk_badge_sync' } else { '' }), 'accent', 'disk', $b) }
     if ($script:rsBackups.Count -eq 0) { $lb.Visible = $true }
     Add-Fixed $lb ([Math]::Min(2, [Math]::Max(1, $script:rsBackups.Count)) * 144 + 4) 8
     $script:lblNoBk = Add-Label $(if ($script:rsBackups.Count -eq 0) { T 'no_existing_backups' } else { '' }) $script:F.small $script:Col.muted 8
@@ -2915,12 +3018,14 @@ function Render-Restore {
     }
     $lb.add_SelectionChanged({ $ix = $script:lstBk.SelectedIndex; if ($ix -ge 0) { & $script:applyBackup $script:rsBackups[$ix] } })
     $script:btnOtherBk.Add_Click({
-        $p = Pick-Folder (Get-DefaultBackupDir) (T 'pick_backup_d'); if (-not $p) { return }
-        if (-not (Test-LooksLikeBackup $p)) { [void](Show-Msg (T 'no_backup_here')); return }
-        $bk = Get-BackupEntry $p
-        $script:rsBackups = @($bk) + @($script:rsBackups)
-        $card = $script:lstBk.Add($bk.Name, (Format-BackupCard $bk), '', 'muted', 'disk', $bk)
-        # neue Karte an den Anfang der Reihenfolge ist nicht nötig – einfach auswählen
+        $start = if (Get-SyncPath) { Get-SyncPath } else { Get-DefaultBackupDir }
+        $p = Pick-Folder $start (T 'pick_backup_d'); if (-not $p) { return }
+        $rp = Resolve-BackupPath $p     # nimmt auch den übergeordneten Ordner eines RF4_Sync-Ordners (Netzwerk/NAS)
+        if (-not $rp) { [void](Show-Msg ((T 'restore_path_bad') + "`n`n" + $p)); return }
+        $dupe = [Array]::FindIndex($script:lstBk.Cards.ToArray(), [Predicate[object]] { param($c) $c.Tag2.Path -eq $rp })
+        if ($dupe -ge 0) { $script:lstBk.SelectedIndex = $dupe; return }
+        $bk = Get-BackupEntry $rp
+        [void]$script:lstBk.Add($bk.Name, (Format-BackupCard $bk), $(if ($bk.IsSync) { T 'bk_badge_sync' } else { '' }), 'accent', 'disk', $bk)
         $script:lstBk.SelectedIndex = $script:lstBk.Cards.Count - 1
         $script:rsBackups = @($script:lstBk.Cards | ForEach-Object { $_.Tag2 })
         $script:lblNoBk.Text = ''; Do-Layout
