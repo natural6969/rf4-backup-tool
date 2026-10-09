@@ -15,7 +15,21 @@ if (-not ('Rf4Ui.UButton' -as [type])) {
     $uiPath = Join-Path $PSScriptRoot 'ui.cs'
     Add-Type -TypeDefinition ([IO.File]::ReadAllText($uiPath, [Text.Encoding]::UTF8)) -ReferencedAssemblies System.Windows.Forms, System.Drawing
 }
-[Rf4Ui.Native]::EnableDpi()                       # VOR dem ersten Fenster: sonst skaliert Windows das Bild hoch (unscharf)
+[Rf4Ui.Native]::EnableDpi()
+[Rf4Ui.WheelFilter]::Install()
+# ── Globaler Fehlerfänger: Fehler in Ereignissen führen nicht mehr zum .NET-Absturzdialog ──
+function Write-ErrorLog([string]$msg) {
+    try { New-Item -ItemType Directory -Force -Path (Get-ConfigDir) | Out-Null; Add-Content -LiteralPath (Join-Path (Get-ConfigDir) 'error.log') -Value ("{0}  {1}`r`n" -f (Get-Date -Format 's'), $msg) -Encoding UTF8 } catch { }
+}
+try { [System.Windows.Forms.Application]::SetUnhandledExceptionMode([System.Windows.Forms.UnhandledExceptionMode]::CatchException) } catch { }
+[System.Windows.Forms.Application]::add_ThreadException({
+    param($s, $e)
+    $m = $e.Exception.Message; Write-ErrorLog ($m + ' | ' + $e.Exception.StackTrace)
+    $script:state.Busy = $false; $script:lblCur = $null
+    try { $form.Cursor = [System.Windows.Forms.Cursors]::Default } catch { }
+    try { [void](Show-Msg ((T 'err_unexpected') + "`n`n" + $m + "`n`n" + (T 'err_logged' @((Join-Path (Get-ConfigDir) 'error.log')))) 'Error' 'OK') } catch { }
+})
+                       # VOR dem ersten Fenster: sonst skaliert Windows das Bild hoch (unscharf)
 try { [System.Windows.Forms.Application]::EnableVisualStyles() } catch { }
 Initialize-Lang $Lang
 
@@ -111,34 +125,40 @@ function New-Dropdown([string]$text, [string]$icon, $items, [string]$selected, [
     return $b
 }
 
-# Eigenes, themefähiges Meldungsfenster (statt weißem MessageBox im dunklen Design)
+# Eigenes, themefähiges Meldungsfenster (statt weißem MessageBox im dunklen Design).
+# WICHTIG: Closures sehen $script:-Variablen nicht -> alles Nötige vorher in lokale Variablen holen.
 function Show-Msg([string]$Text, [string]$Kind = 'Warning', [string]$Buttons = 'OK') {
+    $colBg = $script:Col.bg; $colSurface = $script:Col.surface; $colText = $script:Col.text
+    $isDark = [Rf4Ui.UiTheme]::Dark
+    $res = @{ v = $(if ($Buttons -eq 'YesNo') { 'No' } else { 'OK' }) }
     $dlg = New-Object System.Windows.Forms.Form
     $dlg.Text = T 'app_title'; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.StartPosition = 'CenterParent'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false
-    $dlg.ShowInTaskbar = $false; $dlg.BackColor = $script:Col.bg; $dlg.ClientSize = New-Object System.Drawing.Size((S 520), (S 190))
+    $dlg.ShowInTaskbar = $false; $dlg.BackColor = $colBg
+    $w = (S 560); $dlg.ClientSize = New-Object System.Drawing.Size($w, (S 210))
     $icon = switch ($Kind) { 'Warning' { 'warn' } 'Error' { 'danger' } default { 'accent' } }
-    $lbl = New-Lbl $Text $script:F.body $script:Col.text
-    $lbl.SetBounds((S 28), (S 24), (S 464), (S 100)); $lbl.AutoEllipsis = $true
-    $bar = New-Object System.Windows.Forms.Panel; $bar.SetBounds(0, (S 18), (S 5), (S 100)); $bar.BackColor = [Rf4Ui.UiTheme]::Kind($icon)
+    $lbl = New-Lbl $Text $script:F.body $colText
+    $lbl.SetBounds((S 30), (S 22), ($w - (S 60)), (S 120)); $lbl.AutoEllipsis = $true
+    $bar = New-Object System.Windows.Forms.Panel; $bar.SetBounds(0, (S 18), (S 5), (S 110)); $bar.BackColor = [Rf4Ui.UiTheme]::Kind($icon)
     $dlg.Controls.AddRange(@($bar, $lbl))
-    $script:dlgResult = 'OK'
+    $by = (S 152)
     if ($Buttons -eq 'YesNo') {
         $y = New-Btn (T 'dialog_yes') 'primary'; $n = New-Btn (T 'dialog_no') 'secondary'
-        $y.Width = [Math]::Max($y.Width, (S 110)); $n.Width = [Math]::Max($n.Width, (S 110))
-        $n.Location = New-Object System.Drawing.Point(($dlg.ClientSize.Width - $n.Width - (S 24)), (S 134)); $y.Location = New-Object System.Drawing.Point(($n.Left - $y.Width - (S 10)), (S 134))
-        $y.Add_Click({ $script:dlgResult = 'Yes'; $dlg.Close() }.GetNewClosure()); $n.Add_Click({ $script:dlgResult = 'No'; $dlg.Close() }.GetNewClosure())
-        $dlg.Controls.AddRange(@($y, $n)); $dlg.AcceptButton = $null
+        $y.BackColor = $colBg; $n.BackColor = $colBg
+        $y.Width = [Math]::Max($y.Width, (S 120)); $n.Width = [Math]::Max($n.Width, (S 120))
+        $n.Location = New-Object System.Drawing.Point(($w - $n.Width - (S 24)), $by); $y.Location = New-Object System.Drawing.Point(($n.Left - $y.Width - (S 10)), $by)
+        $y.Add_Click({ $res.v = 'Yes'; $dlg.Close() }.GetNewClosure()); $n.Add_Click({ $res.v = 'No'; $dlg.Close() }.GetNewClosure())
+        $dlg.Controls.AddRange(@($y, $n))
     } else {
-        $o = New-Btn (T 'dialog_ok') 'primary'; $o.Width = [Math]::Max($o.Width, (S 110))
-        $o.Location = New-Object System.Drawing.Point(($dlg.ClientSize.Width - $o.Width - (S 24)), (S 134))
-        $o.Add_Click({ $script:dlgResult = 'OK'; $dlg.Close() }.GetNewClosure()); $dlg.Controls.Add($o)
+        $o = New-Btn (T 'dialog_ok') 'primary'; $o.BackColor = $colBg; $o.Width = [Math]::Max($o.Width, (S 120))
+        $o.Location = New-Object System.Drawing.Point(($w - $o.Width - (S 24)), $by)
+        $o.Add_Click({ $res.v = 'OK'; $dlg.Close() }.GetNewClosure()); $dlg.Controls.Add($o)
     }
-    $dlg.Add_HandleCreated({ [Rf4Ui.Native]::TitleBar($dlg.Handle, [Rf4Ui.UiTheme]::Dark, $script:Col.surface, $script:Col.text) }.GetNewClosure())
-    if ($script:form -and $script:form.Visible) { [void]$dlg.ShowDialog($script:form) } else { [void]$dlg.ShowDialog() }
-    $dlg.Dispose()
-    return $script:dlgResult
+    $dlg.Add_HandleCreated({ try { [Rf4Ui.Native]::TitleBar($dlg.Handle, $isDark, $colSurface, $colText) } catch { } }.GetNewClosure())
+    try {
+        if ($script:form -and $script:form.Visible) { [void]$dlg.ShowDialog($script:form) } else { [void]$dlg.ShowDialog() }
+    } finally { $dlg.Dispose() }
+    return $res.v
 }
-
 function New-AppIcon {
     try {
         $bmp = New-Object System.Drawing.Bitmap(64, 64); $g = [System.Drawing.Graphics]::FromImage($bmp); $g.SmoothingMode = 'AntiAlias'
@@ -167,7 +187,9 @@ $script:pFooter = New-Object System.Windows.Forms.Panel; $script:pFooter.Dock = 
 $form.Controls.Add($script:pContent); $form.Controls.Add($script:stepper); $form.Controls.Add($script:pHeader); $form.Controls.Add($script:pFooter)
 
 $script:lblTitle = New-Lbl '' $script:F.h1; $script:lblSub = New-Lbl '' $script:F.small
-$script:pHeader.Controls.AddRange(@($script:lblTitle, $script:lblSub))
+$script:lblDonate = New-Lbl '' $script:F.small; $script:lblDonate.Cursor = [System.Windows.Forms.Cursors]::Hand
+$script:lblDonate.Add_Click({ try { Start-Process 'https://paypal.me/bjoernoppermann' } catch { } })
+$script:pHeader.Controls.AddRange(@($script:lblTitle, $script:lblSub, $script:lblDonate))
 $script:btnBack = New-Btn '' 'secondary'; $script:btnExtra = New-Btn '' 'ghost'; $script:btnPrimary = New-Btn '' 'primary'
 $script:pFooter.Controls.AddRange(@($script:btnBack, $script:btnExtra, $script:btnPrimary))
 $script:btnBack.Add_Click({ if ($script:BackAction) { & $script:BackAction } })
@@ -189,7 +211,9 @@ function Build-Header {
     $script:stepper.Height = (S 70); $script:stepper.BackColor = $script:Col.bg; $script:stepper.Dpi = [single]$script:Scale; $script:stepper.Font = $script:F.small
     $script:stepper.Steps = @((T 'step1'), (T 'step2'), (T 'step3'), (T 'step4'), (T 'step5'))
     $script:lblTitle.Font = $script:F.h1; $script:lblTitle.ForeColor = $script:Col.text; $script:lblTitle.Text = T 'app_title'
-    $script:lblSub.Font = $script:F.small; $script:lblSub.ForeColor = $script:Col.muted; $script:lblSub.Text = 'v' + $script:ToolVersion + '  ·  ' + (T 'donate')
+    $script:lblSub.Font = $script:F.small; $script:lblSub.ForeColor = $script:Col.muted; $script:lblSub.Text = 'v' + $script:ToolVersion + '  ·  '
+    $script:lblDonate.Font = New-Object System.Drawing.Font($script:F.small, [System.Drawing.FontStyle]::Underline); $script:lblDonate.ForeColor = $script:Col.accent; $script:lblDonate.Text = T 'donate'
+    $script:Tip.SetToolTip($script:lblDonate, 'https://paypal.me/bjoernoppermann')
     foreach ($b in @($script:headLang, $script:headTheme)) { if ($b) { $script:pHeader.Controls.Remove($b); $b.Dispose() } }
     # Sprache
     $langItems = @($script:Langs | ForEach-Object { @{ text = $script:LangNames[$_]; value = $_ } })
@@ -211,7 +235,10 @@ function Build-Header {
 function Position-Header {
     $w = $script:pHeader.ClientSize.Width; $pad = (S 24)
     $script:lblTitle.SetBounds($pad, (S 8), [Math]::Max((S 200), $w - (S 560)), (S 32))
-    $script:lblSub.SetBounds($pad, (S 40), [Math]::Max((S 200), $w - (S 560)), (S 20))
+    $subW = [System.Windows.Forms.TextRenderer]::MeasureText($script:lblSub.Text, $script:lblSub.Font).Width
+    $script:lblSub.SetBounds($pad, (S 40), $subW + (S 2), (S 20))
+    $dw = [System.Windows.Forms.TextRenderer]::MeasureText($script:lblDonate.Text, $script:lblDonate.Font).Width
+    $script:lblDonate.SetBounds($pad + $subW, (S 40), $dw + (S 4), (S 20))
     $h = $script:headLang.Height; $y = [int](($script:pHeader.Height - $h) / 2)
     $script:headTheme.Location = New-Object System.Drawing.Point(($w - $pad - $script:headTheme.Width), $y)
     $script:headLang.Location = New-Object System.Drawing.Point(($script:headTheme.Left - (S 10) - $script:headLang.Width), $y)
@@ -461,7 +488,10 @@ function Render-Backup {
     $script:inDir = New-Input (Get-DefaultBackupDir); $script:pContent.Controls.Add($script:inDir)
     $script:btnBrowseBk = New-Btn (T 'btn_browse') 'secondary' 'folder'; $script:pContent.Controls.Add($script:btnBrowseBk)
     $script:btnBrowseBk.Add_Click({ $p = Pick-Folder $script:inDir.Text; if ($p) { $script:inDir.Text = $p } })
-    Add-Row 42 { param($x, $y, $w) $bw = $script:btnBrowseBk.Width; $script:inDir.SetBounds($x, $y, $w - $bw - (S 10), (S 40)); $script:btnBrowseBk.SetBounds($x + $w - $bw, $y, $bw, (S 40)) }
+    Add-Row 42 { param($x, $y, $w) $bw = $script:btnBrowseBk.Width; $script:inDir.SetBounds($x, $y, $w - $bw - (S 10), (S 40)); $script:btnBrowseBk.SetBounds($x + $w - $bw, $y, $bw, (S 40)) } 4
+    $script:lblBkHint = Add-Label '' $script:F.small $script:Col.muted 4
+    $script:updateBkHint = { $d = $script:inDir.Text.Trim(); $i = if ($d) { Read-BackupInfo $d } else { $null }; $script:lblBkHint.Text = if ($i) { T 'bk_existing_here' @((Get-BackupSourceLabel $i) + '  ' + (Format-BackupDates ([pscustomobject]@{ Created = $i.Created; Updated = $i.Updated; Time = (Get-Date) }))) } else { '' }; Do-Layout }
+    $script:inDir.Box.Add_TextChanged({ & $script:updateBkHint }); & $script:updateBkHint
     Set-Footer (T 'back') { Show-Panel { Render-Action } } (T 'run_backup') {
         if ($script:lstSrc.SelectedIndex -lt 0) { [void](Show-Msg (T 'pick_src')); return }
         $items = @(); for ($i = 0; $i -lt $script:bkKeys.Count; $i++) { if ($script:bkChecks[$i].Checked) { $items += $script:bkKeys[$i] } }
@@ -471,6 +501,7 @@ function Render-Backup {
         $acc = if ($script:bkAcctValue) { @($script:bkAcctValue) } else { $null }
         Start-Operation 'hdr_backup_t' $dest {
             Copy-Rf4Data -SrcDir $src.Path -DstDir $dest -Items $items -Accounts $acc -ShotsSrc (Get-ScreenshotDir $src.Path) -ShotsDst (Join-Path $dest 'Screenshots') -Confirm $script:ConfirmOverwrite
+            Write-BackupInfo $dest $src $items
             Add-BackupDir $dest
             Write-Log 'ok' 'backup_done' @($dest)
         }
@@ -483,10 +514,10 @@ function Render-Restore {
     [void](Add-Label (T 'hdr_restore_t') $script:F.h2 $script:Col.text 4)
     [void](Add-Label (T 'existing_backups') $script:F.bold $script:Col.text 6)
     $script:rsBackups = @(Find-Backups); $script:rsExtra = $null
-    $lb = New-Cards 'one' (S 118); $script:lstBk = $lb
-    foreach ($b in $script:rsBackups) { [void]$lb.Add($b.Name, ($b.Path + "`n" + (Format-BackupInfo $b) + "`n" + (T 'last_change' @($b.Time.ToString('yyyy-MM-dd HH:mm')))), '', 'muted', 'disk', $b) }
+    $lb = New-Cards 'one' (S 136); $script:lstBk = $lb
+    foreach ($b in $script:rsBackups) { [void]$lb.Add($b.Name, (Format-BackupCard $b), '', 'muted', 'disk', $b) }
     if ($script:rsBackups.Count -eq 0) { $lb.Visible = $true }
-    Add-Fixed $lb ([Math]::Min(2, [Math]::Max(1, $script:rsBackups.Count)) * 126 + 4) 8
+    Add-Fixed $lb ([Math]::Min(2, [Math]::Max(1, $script:rsBackups.Count)) * 144 + 4) 8
     $script:lblNoBk = Add-Label $(if ($script:rsBackups.Count -eq 0) { T 'no_existing_backups' } else { '' }) $script:F.small $script:Col.muted 8
     $script:btnOtherBk = New-Btn (T 'other_folder') 'secondary' 'folder'; $script:pContent.Controls.Add($script:btnOtherBk)
     Add-Row 40 { param($x, $y, $w) $script:btnOtherBk.SetBounds($x, $y, $script:btnOtherBk.Width, (S 40)) }
@@ -511,12 +542,9 @@ function Render-Restore {
     $script:btnOtherBk.Add_Click({
         $p = Pick-Folder (Get-DefaultBackupDir) (T 'pick_backup_d'); if (-not $p) { return }
         if (-not (Test-LooksLikeBackup $p)) { [void](Show-Msg (T 'no_backup_here')); return }
-        $bc = Get-BackupContents $p; $files = @(Get-ChildItem -LiteralPath $p -Recurse -File -ErrorAction SilentlyContinue); $sz = 0L; $latest = [datetime]::MinValue
-        foreach ($fi in $files) { $sz += $fi.Length; if ($fi.LastWriteTime -gt $latest) { $latest = $fi.LastWriteTime } }
-        $convs = 0; foreach ($m in $bc.Mailboxes) { $convs += $m.Convs }
-        $bk = [pscustomobject]@{ Path = $p; Name = (Split-Path $p -Leaf); Time = $latest; SizeBytes = $sz; Mailboxes = $bc.Mailboxes.Count; Convs = $convs; Files = $bc.Files; Shots = $bc.Shots }
+        $bk = Get-BackupEntry $p
         $script:rsBackups = @($bk) + @($script:rsBackups)
-        $card = $script:lstBk.Add($bk.Name, ($p + "`n" + (Format-BackupInfo $bk) + "`n" + (T 'last_change' @($latest.ToString('yyyy-MM-dd HH:mm')))), '', 'muted', 'disk', $bk)
+        $card = $script:lstBk.Add($bk.Name, (Format-BackupCard $bk), '', 'muted', 'disk', $bk)
         # neue Karte an den Anfang der Reihenfolge ist nicht nötig – einfach auswählen
         $script:lstBk.SelectedIndex = $script:lstBk.Cards.Count - 1
         $script:rsBackups = @($script:lstBk.Cards | ForEach-Object { $_.Tag2 })

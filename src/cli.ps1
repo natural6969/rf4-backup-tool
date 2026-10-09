@@ -183,6 +183,7 @@ function Do-Backup {
         Reset-Stats
         Copy-Rf4Data -SrcDir $src.Path -DstDir $dest -Items $items -Accounts $accounts `
             -ShotsSrc (Get-ScreenshotDir $src.Path) -ShotsDst (Join-Path $dest 'Screenshots') -Confirm { param($n) Ask-Overwrite $n }
+        Write-BackupInfo $dest $src $items
         Add-BackupDir $dest
         Write-Host ''; Write-Ok (T 'backup_done' @($dest)); Write-Summary
     } catch { Write-Err $_.Exception.Message }
@@ -196,7 +197,7 @@ function Do-Restore {
     $bks = @(Find-Backups)
     $src = $null
     if ($bks.Count -gt 0) {
-        $opts = @($bks | ForEach-Object { "$($_.Name)   $($script:G.dot)   $($_.Time.ToString('yyyy-MM-dd HH:mm'))`n        $($_.Path)`n        $(Format-BackupInfo $_)" }) + @(T 'manual_path')
+        $opts = @($bks | ForEach-Object { "$($_.Name)`n        $($_.Path)`n        $($_.SourceLabel)`n        $(Format-BackupInfo $_)`n        $(Format-BackupDates $_)" }) + @(T 'manual_path')
         $c = Show-Menu (T 'pick_backup_list') $opts
         if ($c -eq 0) { return }
         if ($c -le $bks.Count) { $src = $bks[$c - 1].Path }

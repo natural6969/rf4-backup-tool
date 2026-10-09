@@ -115,7 +115,7 @@ try {
     $undo = Join-Path $tmp 'undo1'
     New-Dat (Join-Path $dst '100.dat') @((New-Msg 'a' 1), (New-Msg 'd' 4))
     $r = Merge-Mailbox -SrcDir (Join-Path $steam 'Mailbox_309850') -DstDir $dst -UndoRoot $undo
-    Ok ($r.Added -eq 2 -and $r.Merged -eq 1 -and $r.Copied -eq 1) 'Merge: +2 (b,c), 1 neu kopiert (200.dat)' "$($r | ConvertTo-Json -Compress)"
+    Ok ($r.Added -eq 3 -and $r.Merged -eq 1 -and $r.Copied -eq 1) 'Merge: +2 (b,c) gemergt + 1 Nachricht in neu kopierter 200.dat = 3' "$($r | ConvertTo-Json -Compress)"
     $ids = Get-Ids (Join-Path $dst '100.dat')
     Ok (($ids -join ',') -eq 'a,b,c,d') 'Reihenfolge nach created sortiert, keine Duplikate' ($ids -join ',')
     Ok (Test-Path (Join-Path $undo 'merge_dst\100.dat')) 'Undo-Kopie des Originals angelegt'
@@ -249,7 +249,7 @@ try {
     Reset-Stats
     Copy-Rf4Data -SrcDir $steam -DstDir $dflt -Items @('mail', 'Settings.dat') -Confirm { $true }
     $stt = Get-Stats
-    Ok ($stt.ConvNew -eq 2 -and $stt.FilesNew -eq 1 -and $stt.MsgAdded -eq 0) "Statistik nach Backup: 2 Konversationen neu, 1 Datei ($($stt | ConvertTo-Json -Compress))"
+    Ok ($stt.ConvNew -eq 2 -and $stt.FilesNew -eq 1 -and $stt.MsgAdded -eq 4) "Statistik nach Backup: 2 Konversationen neu (4 Nachrichten), 1 Datei ($($stt | ConvertTo-Json -Compress))"
     Reset-Stats; Copy-Rf4Data -SrcDir $steam -DstDir $dflt -Items @('mail', 'Settings.dat') -Confirm { $true }
     $stt = Get-Stats; Ok ($stt.ConvNew -eq 0 -and $stt.MsgAdded -eq 0 -and $stt.FilesNew -eq 0) 'Statistik zweiter Lauf: nichts Neues'
     $bks = @(Find-Backups)
@@ -289,6 +289,37 @@ try {
     Ok ((Get-ThemeColors 'x').accent -eq '#112233' -and (Get-ThemeColors 'x').bg -eq '#0B1B2B' -and $script:Themes['x'].base -eq 'light') 'Externes Theme: Teilfarben + Rest aus Dunkel, ungültige Werte ignoriert'
     [IO.Directory]::Delete("$ext\lang", $true); [IO.Directory]::Delete("$ext\themes", $true); Initialize-Data; [void](Set-Lang 'de')
     Ok (-not ($script:Langs -contains 'pt')) 'Nach Entfernen der Dateien ist pt wieder weg'
+
+    Write-Host "`n[9] Backup-Info (von wann, von welcher Installation)" -ForegroundColor Cyan
+    $bi = Join-Path $tmp 'infotest'; New-Item -ItemType Directory -Force -Path $bi | Out-Null
+    Ok ($null -eq (Read-BackupInfo $bi)) 'Ohne Info-Datei: Read-BackupInfo = null'
+    [void](Set-Lang 'de'); Ok ((Get-BackupSourceLabel $null) -match 'unbekannt') 'Quelle unbekannt wird benannt'
+    $instSteam = ($ins | Where-Object { $_.Folder -eq 'RussianFishing4Steam' })[0]
+    Write-BackupInfo $bi $instSteam @('mail', 'Settings.dat')
+    $i1 = Read-BackupInfo $bi
+    Ok ($i1.Variant -eq 'Steam' -and $i1.Folder -eq 'RussianFishing4Steam' -and $i1.Created -match '^\d{4}-\d\d-\d\d \d\d:\d\d$' -and $i1.Updated -eq $i1.Created -and $i1.Items -eq 'mail,Settings.dat' -and $i1.Host -eq $env:COMPUTERNAME) "Info schreiben/lesen: $($i1.Variant) $($i1.Created)"
+    Ok ((Get-BackupSourceLabel $i1) -match 'Steam' -and (Get-BackupSourceLabel $i1) -match [regex]::Escape($env:COMPUTERNAME)) "Quelle als Text: $(Get-BackupSourceLabel $i1)"
+    foreach ($l in 'en', 'zh', 'ru') { [void](Set-Lang $l); Ok ((Get-BackupSourceLabel $i1) -notmatch '\{\d\}' -and (Get-BackupSourceLabel $i1).Length -gt 10) "Quelle in $l übersetzt" }
+    [void](Set-Lang 'de')
+    $instFoo = ($ins | Where-Object { $_.Folder -eq 'RussianFishing4Foo' })[0]
+    1..12 | ForEach-Object { Write-BackupInfo $bi $(if ($_ % 2) { $instFoo } else { $instSteam }) @('mail') }
+    $i2 = Read-BackupInfo $bi
+    Ok ($i2.Created -eq $i1.Created -and @($i2.History).Count -eq 10 -and $i2.Folder -eq 'RussianFishing4Steam') 'Mehrfach-Backup: Erstelldatum bleibt, Historie auf 10 begrenzt, Quelle = zuletzt'
+    # Linux-geschriebene Info wird unter Windows verstanden (wine/proton/win)
+    foreach ($wt in 'wine', 'proton', 'win') { [IO.File]::WriteAllText((Join-Path $bi 'rf4-backup.info'), "created=2026-01-01 10:00`nupdated=2026-01-02 11:00`nhost=linuxbox`nvariant=DE`nfolder=RussianFishing4DE`nwtype=$wt`nw1=/home/x/.wine`nw2=natural`n", (New-Object Text.UTF8Encoding($false))); $lx = Get-BackupSourceLabel (Read-BackupInfo $bi); Ok ($lx -match 'Deutsch' -and $lx -match 'linuxbox' -and $lx -notmatch '\{\d\}') "Info von Linux ($wt): $lx" }
+    [IO.File]::WriteAllText((Join-Path $bi 'rf4-backup.info'), "kaputt ohne gleichheitszeichen`n`n====`n", (New-Object Text.UTF8Encoding($false)))
+    Ok ((Get-BackupSourceLabel (Read-BackupInfo $bi)) -match 'unbekannt') 'Kaputte Info-Datei crasht nicht'
+    # Find-Backups liefert Quelle + Daten, auch für alte Backups ohne Info
+    Copy-Rf4Data -SrcDir $steam -DstDir (Join-Path $multi 'mit_info') -Items @('mail') -Confirm { $true }; Write-BackupInfo (Join-Path $multi 'mit_info') $instSteam @('mail')
+    $env:RF4_BACKUP_DIRS = $multi; $fb = @(Find-Backups); $env:RF4_BACKUP_DIRS = ''
+    $wi = @($fb | Where-Object Name -eq 'mit_info')[0]; $oi = @($fb | Where-Object Name -eq 'Steam_alt')[0]
+    Ok ($wi.SourceLabel -match 'Steam' -and $wi.Created -match '\d{4}') 'Find-Backups: Quelle/Erstellt aus Info-Datei'
+    Ok ($oi.SourceLabel -match 'unbekannt' -and $oi.Created -eq '') 'Find-Backups: altes Backup ohne Info → Quelle unbekannt'
+    Ok ((Format-BackupDates $oi) -match '\d{4}-\d\d-\d\d' -and (Format-BackupDates $oi) -notmatch '\{\d\}') 'Format-BackupDates fällt auf Dateizeit zurück'
+    Ok ((Format-BackupCard $wi).Split("`n").Count -eq 4) 'Format-BackupCard: 4 Zeilen (Pfad, Quelle, Inhalt, Daten)'
+    # Spiel läuft: nur echte Spielprozesse
+    $env:RF4_FAKE_RUNNING = 'rf4_x64'; Ok ((Test-Rf4Running) -eq 'rf4_x64') 'Test-Hook RF4_FAKE_RUNNING'; $env:RF4_FAKE_RUNNING = ''
+    Ok ($null -eq (Test-Rf4Running) -or (Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^rf4_x(32|64)$' })) 'Launcher/Installer lösen keine Warnung aus (nur rf4_x32/64)'
 }
 finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

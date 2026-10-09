@@ -168,7 +168,7 @@ export RF4_SCAN_USERS=""
 find_backups; check "Find-Backups: ohne Backups leer" '(( ${#BK_PATH[@]} == 0 ))'
 reset_stats
 copy_rf4data "$STEAM" "$HOME/RF4_Backup" "mail Settings.dat" "" "" "" "" </dev/null >/dev/null
-check "Statistik nach Backup: 2 Konversationen, 1 Datei, 0 Nachrichten" '(( STAT_CONV == 2 && STAT_FILES == 1 && STAT_MSG == 0 ))' "conv=$STAT_CONV files=$STAT_FILES msg=$STAT_MSG"
+check "Statistik nach Backup: 2 Konversationen, 1 Datei, 4 Nachrichten" '(( STAT_CONV == 2 && STAT_FILES == 1 && STAT_MSG == 4 ))' "conv=$STAT_CONV files=$STAT_FILES msg=$STAT_MSG"
 reset_stats; copy_rf4data "$STEAM" "$HOME/RF4_Backup" "mail Settings.dat" "" "" "" "" </dev/null >/dev/null
 check "Statistik zweiter Lauf: nichts Neues" '(( STAT_CONV == 0 && STAT_FILES == 0 && STAT_MSG == 0 ))'
 find_backups
@@ -208,6 +208,32 @@ check "disp_width: ASCII=1, CJK=2" '[[ "$(disp_width abc)" == 3 && "$(disp_width
 out=$(RF4_ASCII=1 bash "$SCRIPT" -l en </dev/null 2>&1); check "ASCII-Modus: keine Rahmenzeichen" '[[ "$out" != *"╔"* && "$out" == *"+====="* ]]' "$(echo "$out" | head -3)"
 out=$(printf '3\n1\n0\n0\n' | bash "$SCRIPT" -l en 2>&1)
 check "Restore-Menü listet Backups (Name, Pfad, Inhalt)" '[[ "$out" == *"Choose a backup"* && "$out" == *"RF4_Backup"* && "$out" == *"conversations"* ]]' "$(echo "$out" | head -12)"
+
+
+echo; echo "[8] Backup-Info (von wann, von welcher Installation)"
+INFO="$TMP/infotest"; mkdir -p "$INFO"
+read_backup_info "$INFO"; check "Ohne Info-Datei: BI_OK=0, Quelle unbekannt" '(( BI_OK == 0 )) && [[ "$(LANG_CODE=de bk_source_text)" == *unbekannt* ]]'
+si=-1; for i in "${!INST_FOLDER[@]}"; do [[ "${INST_FOLDER[$i]}" == RussianFishing4Steam && "${INST_WTYPE[$i]}" == wine ]] && si=$i; done
+check "Steam-Installation (Wine) im Fixture gefunden" '(( si >= 0 ))' "${INST_FOLDER[*]}"
+write_backup_info "$INFO" "$si" "mail Settings.dat"; read_backup_info "$INFO"
+check "Info schreiben/lesen: Variante, Ordner, Host, Datum" '(( BI_OK == 1 )) && [[ "$BI_VARIANT" == Steam && "$BI_FOLDER" == RussianFishing4Steam && -n "$BI_HOST" && "$BI_CREATED" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ && "$BI_UPDATED" == "$BI_CREATED" ]]' "$BI_VARIANT $BI_CREATED"
+for l in de en zh ru; do LANG_CODE=$l; s="$(bk_source_text)"; check "Quelle in $l: $s" '[[ "$s" != *"{0}"* && ${#s} -gt 10 ]]'; done; LANG_CODE=de
+c1="$BI_CREATED"
+for n in 1 2 3 4 5 6 7 8 9 10 11 12; do write_backup_info "$INFO" "$si" "mail"; done
+read_backup_info "$INFO"; hl=$(grep -c '^history=' "$INFO/rf4-backup.info")
+check "Mehrfach-Backup: Erstelldatum bleibt, Historie auf 10 begrenzt" '[[ "$BI_CREATED" == "$c1" ]] && (( hl == 10 ))' "$BI_CREATED vs $c1, history=$hl"
+# von Windows geschriebene Info (wtype=local/user/drive)
+for wt in local user drive extra; do printf 'created=2026-01-01 10:00\nupdated=2026-01-02 11:00\nhost=winpc\nvariant=EN\nfolder=RussianFishing4EN\nwtype=%s\nw1=C:\nw2=reinh\n' "$wt" > "$INFO/rf4-backup.info"; read_backup_info "$INFO"; s="$(bk_source_text)"; check "Info von Windows ($wt): $s" '[[ "$s" == *winpc* && "$s" == *Englisch* && "$s" != *"{0}"* ]]'; done
+printf 'kaputt ohne gleichheitszeichen\n\n====\n' > "$INFO/rf4-backup.info"; read_backup_info "$INFO"; check "Kaputte Info-Datei crasht nicht" '[[ "$(bk_source_text)" == *unbekannt* ]]'
+copy_rf4data "$STEAM" "$MULTI/mit_info" "mail" "" "" "" "" </dev/null >/dev/null; write_backup_info "$MULTI/mit_info" "$si" "mail"
+RF4_BACKUP_DIRS="$MULTI" find_backups
+for i in "${!BK_NAME[@]}"; do [[ "${BK_NAME[$i]}" == mit_info ]] && wi=$i; [[ "${BK_NAME[$i]}" == Steam_alt ]] && oi=$i; done
+check "find_backups: Quelle aus Info-Datei (mit_info)" '[[ "${BK_SRC[$wi]}" == *Steam* && "${BK_DATES[$wi]}" == *Erstellt* ]]' "${BK_SRC[$wi]} / ${BK_DATES[$wi]}"
+check "find_backups: altes Backup ohne Info → Quelle unbekannt" '[[ "${BK_SRC[$oi]}" == *unbekannt* ]]' "${BK_SRC[$oi]}"
+out=$(RF4_FAKE_RUNNING=rf4_x64 rf4_running); check "RF4_FAKE_RUNNING-Hook" '[[ "$out" == rf4_x64 ]]'
+out=$(printf '3\n1\n1\na\n\n1\nn\n\n0\n' | RF4_FAKE_RUNNING=rf4_x64 bash "$SCRIPT" -l en 2>&1); check "RF4 läuft + n: Abbruch ohne Import" '[[ "$out" == *"seems to be running"* && "$out" == *Cancelled* && "$out" != *"Import finished"* ]]' "$(echo "$out" | tail -8)"
+out=$(printf '3\n1\n1\na\n\n1\ny\n\n0\n' | RF4_FAKE_RUNNING=rf4_x64 bash "$SCRIPT" -l en 2>&1); check "RF4 läuft + y: Import läuft durch" '[[ "$out" == *"seems to be running"* && "$out" == *"Import finished"* ]]' "$(echo "$out" | tail -8)"
+check "label_for: Windows-Ort 'local' und Linux-Orte" '[[ "$(label_for Steam RussianFishing4Steam local C: reinh)" == *"C: / reinh"* && "$(label_for Other Foo wine /p natural)" == *"Wine: natural"* && "$(label_for DE x proton 309850 u)" == *"309850"* ]]'
 
 echo
 printf 'Ergebnis: %d bestanden, %d fehlgeschlagen\n' "$PASS" "$FAIL"

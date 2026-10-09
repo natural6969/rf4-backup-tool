@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RF4 — 备份与迁移工具</title><style>body{margin:0;font:16px/1.6 "Segoe UI",system-ui,sans-serif;background:#f3f6fa;color:#13253a}main{max-width:960px;margin:0 auto;padding:24px 28px 80px}nav{position:sticky;top:0;background:#fff;border-bottom:1px solid #d0dce8;padding:10px 28px;text-align:right}nav a,a{color:#a85f00}nav .cur{font-weight:700}h1{font-size:30px;margin:.4em 0}h2{margin-top:2em;border-bottom:2px solid #d0dce8;padding-bottom:.2em}h3{margin-top:1.6em}img{max-width:100%;height:auto;border:1px solid #d0dce8;border-radius:12px;margin:10px 0;box-shadow:0 4px 18px #0002}code{background:#e9f0f7;padding:1px 6px;border-radius:5px;font-family:Consolas,monospace;font-size:.92em}pre{background:#0b1b2b;color:#e8eef4;padding:14px 16px;border-radius:10px;overflow:auto}pre code{background:none;color:inherit;padding:0}blockquote{margin:1em 0;padding:.6em 1em;border-left:4px solid #c77700;background:#fff7e8;border-radius:0 8px 8px 0}.tw{overflow-x:auto}table{border-collapse:collapse;margin:1em 0;background:#fff}th,td{border:1px solid #d0dce8;padding:6px 12px;text-align:left;vertical-align:top}th{background:#e9f0f7}hr{border:0;border-top:1px solid #d0dce8;margin:2em 0}@media(prefers-color-scheme:dark){body{background:#0b1b2b;color:#e8eef4}nav{background:#12293f;border-color:#27445f}h2,th,td,hr,img{border-color:#27445f}a,nav a{color:#f2a93b}code{background:#1a3652}table{background:#12293f}th{background:#1a3652}blockquote{background:#1a2a1f33;border-color:#f2a93b}}</style></head><body><nav><a href="guide.de.html">Deutsch</a> · <a href="guide.en.html">English</a> · <span class="cur">中文</span> · <a href="guide.ru.html">Русский</a></nav><main>
+<h1 id="rf4-备份与迁移工具">RF4 — 备份与迁移工具</h1>
+<p><a href="guide.de.html">Deutsch</a> · <a href="guide.en.html">English</a> · <strong>中文</strong> · <a href="guide.ru.html">Русский</a></p>
+<p>免费工具，用于<strong>备份、恢复、合并和同步</strong> <em>Russian Fishing 4</em> 的玩家数据：游戏内邮箱（聊天记录）、设置和截图。 支持 <strong>Windows</strong>（图形界面 + 终端，PowerShell）以及 <strong>Linux/macOS</strong>（bash）。</p>
+<ul><li>🌍 <strong>四种语言，可随时完整切换：</strong> 德语 · English · 中文 · Русский —— 其他语言只需添加一个文本文件</li><li>🎨 <strong>深色 / 浅色自动切换</strong>（跟随 Windows，也可手动选择）—— 其他外观同样只需一个文本文件</li><li>🖥️ <strong>任何显示缩放下都清晰</strong>（100 % … 200 %，多显示器）</li><li>🛡️ <strong>绝不删除任何文件。</strong> 被替换的文件会先复制到撤销文件夹</li><li>🔍 自动查找 <strong>独立版、Steam、Wine、Proton</strong>、其他用户和其他驱动器</li></ul>
+<p><img alt="选择操作 – 深色" src="img/dark-zh-backup.png"></p>
+<h2 id="快速开始">快速开始</h2>
+<ol><li><strong>旧电脑：</strong> 启动程序 → <strong>创建备份</strong> → 选择来源 → <em>开始备份</em>。</li><li>把备份文件夹（默认 <code>C:\Users\&lt;用户名&gt;\RF4_Backup</code>）通过 U 盘、NAS 或云盘带到新电脑，并在新电脑上<strong>启动一次 RF4 后关闭</strong>。</li><li><strong>新电脑：</strong> 启动程序 → <strong>恢复备份</strong> → 在列表中选择备份 → 选择目标安装 → <em>开始恢复</em>。</li></ol>
+<p>进度、背包和渔具保存在 RF4 服务器上，会自动同步。本工具负责<strong>本地</strong>数据：聊天记录、设置、截图。</p>
+<h2 id="安装">安装</h2>
+<div class="tw"><table><thead><tr><th>方式</th><th>说明</th></tr></thead><tbody><tr><td><strong>安装程序</strong> <code>rf4sa-backup-full-setup-v1.5.0.exe</code>（推荐）</td><td>双击即可。创建开始菜单项（图形界面、终端、<strong>卸载</strong>）。无需管理员权限。</td></tr><tr><td><strong>无需安装</strong></td><td>右键 <code>rf4sa-backup-gui.ps1</code> → <strong>使用 PowerShell 运行</strong></td></tr><tr><td><strong>Linux / macOS</strong></td><td><code>bash rf4sa-backup.sh</code>（需要 bash ≥ 4 和 <code>python3</code>）</td></tr></tbody></table></div>
+<p>Windows 需要 Windows PowerShell 5.1（Windows 10/11 已预装），Windows 上<strong>不需要</strong> Python。若脚本被阻止：<code>powershell -ExecutionPolicy Bypass -File rf4sa-backup-gui.ps1</code>。</p>
+<h2 id="图形界面">图形界面</h2>
+<p>五个步骤：<strong>扫描 → 操作 → 选择 → 执行 → 结果</strong>。右上角随时可切换<strong>语言</strong>（🌐）和<strong>外观</strong>（☀/☾），界面立即生效。</p>
+<ul><li><strong>创建备份：</strong> 选择来源，勾选要保存的内容（邮箱、Settings.dat、Preferences.dat、Crafting.dat、截图），可只备份某一个账号，选择目标文件夹。</li><li><strong>恢复备份：</strong> 列表显示所有<strong>现有备份</strong>（默认文件夹、曾经使用过的文件夹及其子文件夹），含内容、大小和日期，最新的在前。每个备份都会显示<strong>来自哪个安装、何时创建</strong>（来源、电脑名、创建/更新时间，保存在备份文件夹中的 <code>rf4-backup.info</code>）。用「选择其他文件夹…」可选择别处的备份（如 U 盘）。备份中包含的内容会自动勾选。</li><li><strong>合并安装：</strong> 选择目标和一个或多个来源，只补充缺失的消息。</li><li><strong>云 / NAS 同步：</strong> 选择共享文件夹（Nextcloud、Syncthing、NAS、U 盘……）和安装。</li><li><strong>结果：</strong> 显示关键数据（补充的消息、对话、复制的文件、截图、跳过、错误）；<em>显示详情</em> 可展开完整日志。</li></ul>
+<p><strong>外观：</strong>默认「自动（跟随 Windows）」——在 Windows 中切换浅色/深色，程序会<strong>立即</strong>跟随，甚至在运行时。 <strong>高分屏：</strong>支持每显示器 DPI；文字和图标原生绘制，不是放大的位图。</p>
+<h2 id="终端程序">终端程序</h2>
+<pre><code>powershell -ExecutionPolicy Bypass -File rf4sa-backup.ps1 [-Lang de|en|zh|ru|自定义]
+bash rf4sa-backup.sh [-l xx]          # Linux / macOS
+</code></pre>
+<p>数字菜单；多选：输入数字切换，<code>a</code> = 全选，<code>n</code> = 全不选，<code>Enter</code> = 继续，<code>0</code> = 返回。<strong>恢复</strong>会以列表显示现有备份。每次操作后显示摘要。边框考虑了中文的双倍宽度，对齐整齐；<code>RF4_ASCII=1</code> 为纯 ASCII。建议使用 <strong>Windows Terminal</strong> 显示中文。</p>
+<h2 id="功能详解">功能详解</h2>
+<ul><li><strong>合并：</strong> 按消息 ID（<code>meta.id</code>）去重，按时间（<code>meta.created</code>）排序插入。只有<strong>确实有新消息</strong>时才写文件，先写临时文件并回读校验成功后才替换原文件；原文件会先复制到撤销文件夹。</li><li><strong>同步：</strong> (1) 本地 → 同步文件夹（合并）；(2) 同步文件夹 → 本地（合并）；(3) 设置文件以<strong>较新</strong>的为准。</li><li><strong>撤销文件夹：</strong> <code>&lt;安装&gt;\_rf4tool_undo\&lt;日期_时间&gt;\…</code>。把文件复制回去即可撤销。程序绝不会删除它。</li><li><strong>安全：</strong> 扫描和备份只读取。RF4 正在运行时会警告（恢复/合并/同步前请先关闭游戏）。无网络访问，无遥测。</li><li>RF4 官方只允许 <strong>Steam → 独立版</strong>，不允许反向（<a href="https://nga.li/rf4transfer">nga.li/rf4transfer</a>）。</li></ul>
+<h2 id="语言和外观可自行添加">语言和外观（可自行添加）</h2>
+<p>一切都是模块化的——纯文本文件，启动时自动识别，无需重新编译。</p>
+<p><strong>语言：</strong>把 [<code>examples/template.lang</code>](examples/template.lang) 复制到 <code>%APPDATA%\rf4-backup\lang\pt.lang</code>（或脚本旁的 <code>lang\</code> 文件夹；Linux：<code>~/.config/rf4-backup/lang/pt.lang</code>），设置 <code>@code=pt</code> 和 <code>@name=…</code>，翻译 <code>=</code> 右边的文字。<strong>缺少的行会自动回退到英语</strong>，所以可以只翻译一部分。请保留占位符 <code>{0}</code>、<code>{1}</code>。文件编码 UTF-8。</p>
+<p><strong>外观：</strong>把 [<code>examples/template.theme</code>](examples/template.theme) 复制到 <code>%APPDATA%\rf4-backup\themes\&lt;名称&gt;.theme</code> 并修改 <code>#RRGGBB</code> 颜色。<code>@base=dark|light</code> 表示在「自动」模式下它代表哪种 Windows 模式。未设置的颜色取自深色外观。</p>
+<p>内置：<strong>深色（海军蓝）</strong>配暖琥珀色强调色，以及<strong>浅色</strong>。对比度由测试验证。</p>
+<h2 id="数据位置">数据位置</h2>
+<pre><code>%APPDATA%\RussianFishingLLC\&lt;版本&gt;\Mailbox_&lt;账号ID&gt;\*.dat      聊天（JSON，UTF-8 带 BOM）
+%APPDATA%\RussianFishingLLC\&lt;版本&gt;\Settings.dat | Preferences.dat | Crafting.dat
+文档\Russian Fishing 4\Screenshots
+</code></pre>
+<p>版本：<code>RussianFishing4DE</code>、<code>RussianFishing4DE_new</code>、<code>RussianFishing4EN</code>、<code>RussianFishing4Steam</code>（该目录下的其他文件夹也会被自动识别）。Linux 下相同路径位于 Wine/Proton 前缀内。 本工具自身只保存设置：<code>%APPDATA%\rf4-backup\settings.json</code>（Linux：<code>~/.config/rf4-backup/settings.conf</code>）。</p>
+<h2 id="常见问题">常见问题</h2>
+<ul><li><strong>未找到安装？</strong> RF4 必须至少启动过一次。检查 <code>%APPDATA%\RussianFishingLLC</code> 是否存在；否则在恢复时手动选择目标路径。</li><li><strong>备份不在列表中？</strong> 列表涵盖 <code>RF4_Backup</code>、曾用文件夹及其下一级。文件夹含有 <code>Mailbox_*</code>、<code>.dat</code> 文件或 <code>Screenshots</code> 即视为备份。可用「选择其他文件夹…」。</li><li><strong>恢复后没有聊天记录？</strong> 导入时 RF4 必须已关闭。可重新导入（可重复执行）或从撤销文件夹复制回来。请核对账号 ID。</li><li><strong>终端显示方框？</strong> 请使用 Windows Terminal；图形界面不受影响。</li><li><strong>Steam 云覆盖文件？</strong> Steam 安装可能出现；恢复后请离线启动 Steam，或暂时关闭该游戏的云同步。</li><li>**Linux 没有 <code>python3</code>？** <code>sudo apt install python3</code> —— 仅用于合并 JSON。</li></ul>
+<h2 id="卸载">卸载</h2>
+<p>开始菜单 → <em>RF4 Backup Tool</em> → <strong>卸载 RF4 Backup Tool</strong>（或 Windows 设置 → 应用）。只会删除程序文件，并询问是否一并删除保存的<strong>设置</strong>（语言、外观、同步文件夹、您自己的语言/外观文件）。<strong>您的 RF4 游戏数据和备份绝不会被触碰。</strong>不用安装程序时：直接删除文件（可选删除 <code>%APPDATA%\rf4-backup</code>）。</p>
+<h2 id="开发">开发</h2>
+<p>源码在 <code>src/</code>；<code>build.ps1</code> 生成发布的单文件。测试：<code>tests/Test-Core.ps1</code>、<code>tests/Test-Cli.ps1</code>、<code>tests/Test-Gui.ps1</code>（<code>powershell -STA</code>）、<code>bash tests/test-sh.sh</code>。安装程序：Inno Setup 6（<code>installer/*.iss</code>）。</p>
+<p>MIT 许可证 · 捐赠：<a href="https://paypal.me/bjoernoppermann">paypal.me/bjoernoppermann</a> · <a href="https://codeberg.org/Natural78/rf4-backup-tool">Codeberg</a></p>
+</main></body></html>

@@ -223,7 +223,7 @@ TX[de:last_change]='Zuletzt geändert: {0}'
 TX[de:chip_found]='vorhanden'
 TX[de:chip_missing]='nicht vorhanden'
 TX[de:convs_short]='Konversationen'
-TX[de:sum_msgs]='Nachrichten ergänzt'
+TX[de:sum_msgs]='Nachrichten übertragen'
 TX[de:sum_convs]='Konversationen'
 TX[de:sum_files]='Dateien kopiert'
 TX[de:sum_shots]='Screenshots'
@@ -256,6 +256,13 @@ TX[de:sync_status_btn]='Status anzeigen'
 TX[de:dialog_yes]='Ja'
 TX[de:dialog_no]='Nein'
 TX[de:dialog_ok]='OK'
+TX[de:err_unexpected]='Ein unerwarteter Fehler ist aufgetreten. Das Programm läuft weiter, es wurde nichts gelöscht.'
+TX[de:err_logged]='Details: {0}'
+TX[de:bk_source]='Quelle: {0}'
+TX[de:bk_source_unknown]='Quelle: unbekannt (Backup ohne Info-Datei)'
+TX[de:bk_from_pc]='(PC {0})'
+TX[de:bk_dates]='Erstellt: {0}   ·   Aktualisiert: {1}'
+TX[de:bk_existing_here]='Hier liegt schon ein Backup. {0}'
 LANGS+=('en')
 LANG_NAMES[en]='English'
 TX[en:acct_line]='Account {0}  ({1} conversations)'
@@ -453,7 +460,7 @@ TX[en:last_change]='Last changed: {0}'
 TX[en:chip_found]='found'
 TX[en:chip_missing]='not present'
 TX[en:convs_short]='conversations'
-TX[en:sum_msgs]='messages added'
+TX[en:sum_msgs]='messages transferred'
 TX[en:sum_convs]='conversations'
 TX[en:sum_files]='files copied'
 TX[en:sum_shots]='screenshots'
@@ -486,6 +493,13 @@ TX[en:sync_status_btn]='Show status'
 TX[en:dialog_yes]='Yes'
 TX[en:dialog_no]='No'
 TX[en:dialog_ok]='OK'
+TX[en:err_unexpected]='An unexpected error occurred. The program keeps running; nothing was deleted.'
+TX[en:err_logged]='Details: {0}'
+TX[en:bk_source]='Source: {0}'
+TX[en:bk_source_unknown]='Source: unknown (backup without info file)'
+TX[en:bk_from_pc]='(PC {0})'
+TX[en:bk_dates]='Created: {0}   ·   Updated: {1}'
+TX[en:bk_existing_here]='There is already a backup here. {0}'
 LANGS+=('zh')
 LANG_NAMES[zh]='中文'
 TX[zh:acct_line]='账号 {0}  ({1} 个对话)'
@@ -683,7 +697,7 @@ TX[zh:last_change]='最后修改: {0}'
 TX[zh:chip_found]='已找到'
 TX[zh:chip_missing]='不存在'
 TX[zh:convs_short]='对话'
-TX[zh:sum_msgs]='条消息已补充'
+TX[zh:sum_msgs]='条消息已传输'
 TX[zh:sum_convs]='个对话'
 TX[zh:sum_files]='个文件已复制'
 TX[zh:sum_shots]='张截图'
@@ -716,6 +730,13 @@ TX[zh:sync_status_btn]='显示状态'
 TX[zh:dialog_yes]='是'
 TX[zh:dialog_no]='否'
 TX[zh:dialog_ok]='确定'
+TX[zh:err_unexpected]='发生意外错误。程序继续运行，没有删除任何内容。'
+TX[zh:err_logged]='详情: {0}'
+TX[zh:bk_source]='来源: {0}'
+TX[zh:bk_source_unknown]='来源: 未知（备份没有信息文件）'
+TX[zh:bk_from_pc]='（电脑 {0}）'
+TX[zh:bk_dates]='创建: {0}   ·   更新: {1}'
+TX[zh:bk_existing_here]='此处已有备份。{0}'
 LANGS+=('ru')
 LANG_NAMES[ru]='Русский'
 TX[ru:acct_line]='Аккаунт {0}  (диалогов: {1})'
@@ -913,7 +934,7 @@ TX[ru:last_change]='Изменено: {0}'
 TX[ru:chip_found]='найдено'
 TX[ru:chip_missing]='нет'
 TX[ru:convs_short]='диалогов'
-TX[ru:sum_msgs]='сообщений добавлено'
+TX[ru:sum_msgs]='сообщений перенесено'
 TX[ru:sum_convs]='диалогов'
 TX[ru:sum_files]='файлов скопировано'
 TX[ru:sum_shots]='скриншотов'
@@ -946,6 +967,13 @@ TX[ru:sync_status_btn]='Показать состояние'
 TX[ru:dialog_yes]='Да'
 TX[ru:dialog_no]='Нет'
 TX[ru:dialog_ok]='ОК'
+TX[ru:err_unexpected]='Произошла непредвиденная ошибка. Программа продолжает работу, ничего не удалено.'
+TX[ru:err_logged]='Подробности: {0}'
+TX[ru:bk_source]='Источник: {0}'
+TX[ru:bk_source_unknown]='Источник: неизвестен (копия без информационного файла)'
+TX[ru:bk_from_pc]='(ПК {0})'
+TX[ru:bk_dates]='Создана: {0}   ·   Обновлена: {1}'
+TX[ru:bk_existing_here]='Здесь уже есть копия. {0}'
 
 # ── Konfiguration / Sprache ────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
@@ -1118,9 +1146,10 @@ ask_overwrite() {   # ask_overwrite name → 0 = ja
     a="${a,,}"
     [[ "$a" == "j" || "$a" == "y" || "$a" == "ja" || "$a" == "yes" || "$a" == "д" || "$a" == "да" ]]
 }
-rf4_running() {   # gibt Prozessnamen aus, wenn RF4 läuft
+rf4_running() {   # gibt einen Hinweis aus, wenn das Spiel läuft (nur rf4_x64/rf4_x32, nicht Launcher/Installer)
+    [[ -n "${RF4_FAKE_RUNNING:-}" ]] && { printf '%s' "$RF4_FAKE_RUNNING"; return 0; }
     command -v pgrep >/dev/null 2>&1 || return 1
-    pgrep -if 'rf4_x64|rf4_x32|RussianFishing4\.exe|RussianFishing.*\.exe' 2>/dev/null | head -1 | grep -q . && echo "rf4"
+    pgrep -if 'rf4_x64|rf4_x32' 2>/dev/null | head -1 | grep -q . && printf 'rf4'
 }
 confirm_game_closed() {
     local run; run=$(rf4_running) || true
@@ -1207,18 +1236,21 @@ find_installations() {
     done
 }
 
-inst_label() {   # inst_label index
-    local i="$1" name where
-    if [[ "${INST_VARIANT[$i]}" == "Other" ]]; then name=$(t v_Other "${INST_FOLDER[$i]}"); else name=$(t "v_${INST_VARIANT[$i]}"); fi
-    case "${INST_WTYPE[$i]}" in
-        win)    where=$(t w_win "${INST_W1[$i]}" "${INST_W2[$i]}") ;;
-        wine)   where=$(t w_wine "${INST_W2[$i]}") ;;
-        proton) where=$(t w_proton "${INST_W1[$i]}") ;;
-        *)      where=$(t w_extra "${INST_W1[$i]}") ;;
+label_for() {   # label_for variant folder wtype w1 w2   (versteht auch von Windows geschriebene Orte)
+    local variant="$1" folder="$2" wtype="$3" w1="$4" w2="$5" name where
+    if [[ "$variant" == "Other" || -z "$variant" ]]; then name=$(t v_Other "$folder"); else name=$(t "v_$variant"); fi
+    case "$wtype" in
+        win)    where=$(t w_win "$w1" "$w2") ;;
+        wine)   where=$(t w_wine "$w2") ;;
+        proton) where=$(t w_proton "$w1") ;;
+        local)  where="$w1 / $w2" ;;
+        user)   where=$(t w_user "$w1") ;;
+        drive)  where=$(t w_drive "$w1" "$w2") ;;
+        *)      where=$(t w_extra "$w1") ;;
     esac
     printf '%s [%s]' "$name" "$where"
 }
-
+inst_label() { label_for "${INST_VARIANT[$1]}" "${INST_FOLDER[$1]}" "${INST_WTYPE[$1]}" "${INST_W1[$1]}" "${INST_W2[$1]}"; }
 # ── Mailboxen ──────────────────────────────────────────────────────────────────
 declare -a MB_NAME=() MB_ID=() MB_PATH=() MB_CONVS=()
 count_dats() { local n=0 f; for f in "$1"/*.dat; do [[ -f "$f" ]] && n=$((n + 1)); done; echo "$n"; }
@@ -1268,7 +1300,11 @@ for name in sorted(os.listdir(src)):
     dp = os.path.join(dst, name)
     if not os.path.exists(dp):
         shutil.copy2(sp, dp)
-        print('COPIED\t' + name)
+        try:
+            n = len(load(sp).get('items') or [])
+        except Exception:
+            n = 0
+        print('COPIED\t%s\t%d' % (name, n))
         continue
     try:
         s = load(sp)
@@ -1308,7 +1344,7 @@ merge_mailbox() {   # merge_mailbox srcdir dstdir [undoroot]
     while IFS=$'\t' read -r kind name extra; do
         extra="${extra%$'\r'}"; name="${name%$'\r'}"; kind="${kind%$'\r'}"
         case "$kind" in
-            COPIED)    copied=$((copied + 1)); STAT_CONV=$((STAT_CONV + 1)) ;;
+            COPIED)    copied=$((copied + 1)); STAT_CONV=$((STAT_CONV + 1)); STAT_MSG=$((STAT_MSG + ${extra:-0})) ;;
             UNCHANGED) unchanged=$((unchanged + 1)) ;;
             MERGED)    merged=$((merged + 1)); STAT_CONV=$((STAT_CONV + 1)); STAT_MSG=$((STAT_MSG + extra)); info "$(t mb_merge_file "$name" "$extra")" ;;
             FAILED)    failed=$((failed + 1)); STAT_FAIL=$((STAT_FAIL + 1)); warn "$(t mb_merge_fail "$name" "$extra")" ;;
@@ -1386,6 +1422,46 @@ copy_rf4data() {
     if [[ -n "$undo" && -d "$undo" ]]; then info "$(t undo_saved "$undo")"; fi
 }
 
+# ── Backup-Info (von wann, von welcher Installation) – gleiche Datei wie unter Windows ──
+write_backup_info() {   # write_backup_info dest inst_index "items"
+    local dest="$1" i="$2" items="$3" f="$1/rf4-backup.info" now created="" l n=0
+    local -a hist=()
+    now="$(date '+%Y-%m-%d %H:%M')"
+    if [[ -f "$f" ]]; then
+        created="$(grep -m1 '^created=' "$f" | cut -d= -f2-)"
+        while IFS= read -r l; do hist+=("${l#history=}"); done < <(grep '^history=' "$f")
+    fi
+    [[ -z "$created" ]] && created="$now"
+    mkdir -p "$dest"
+    {
+        echo '# RF4 Backup Tool - Informationen zu diesem Backup (von wann, von welcher Installation)'
+        echo "created=$created"; echo "updated=$now"; echo "tool=$TOOL_VERSION"; echo "host=$(hostname 2>/dev/null || echo host)"; echo "user=${USER:-}"
+        echo "variant=${INST_VARIANT[$i]}"; echo "folder=${INST_FOLDER[$i]}"; echo "wtype=${INST_WTYPE[$i]}"; echo "w1=${INST_W1[$i]}"; echo "w2=${INST_W2[$i]}"; echo "srcpath=${INST_PATH[$i]}"
+        echo "items=${items// /,}"
+        echo "history=$now|${INST_VARIANT[$i]}|${INST_FOLDER[$i]}|$(hostname 2>/dev/null || echo host)"
+        for l in "${hist[@]:-}"; do if [[ -n "$l" && n -lt 9 ]]; then echo "history=$l"; n=$((n + 1)); fi; done
+    } > "$f.tmp" && mv "$f.tmp" "$f"
+}
+# liest rf4-backup.info → setzt BI_* (BI_OK=1 wenn vorhanden)
+read_backup_info() {
+    BI_OK=0; BI_CREATED=""; BI_UPDATED=""; BI_HOST=""; BI_VARIANT=""; BI_FOLDER=""; BI_WTYPE=""; BI_W1=""; BI_W2=""
+    local f="$1/rf4-backup.info" line k v
+    [[ -f "$f" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"; line="${line#$'\xEF\xBB\xBF'}"
+        [[ -z "$line" || "${line:0:1}" == "#" || "$line" != *=* ]] && continue
+        k="${line%%=*}"; v="${line#*=}"
+        case "$k" in created) BI_CREATED="$v" ;; updated) BI_UPDATED="$v" ;; host) BI_HOST="$v" ;; variant) BI_VARIANT="$v" ;; folder) BI_FOLDER="$v" ;; wtype) BI_WTYPE="$v" ;; w1) BI_W1="$v" ;; w2) BI_W2="$v" ;; esac
+    done < "$f"
+    BI_OK=1
+}
+bk_source_text() {   # nach read_backup_info
+    if (( BI_OK )) && [[ -n "$BI_VARIANT" ]]; then
+        local s; s="$(label_for "$BI_VARIANT" "$BI_FOLDER" "$BI_WTYPE" "$BI_W1" "$BI_W2")"
+        [[ -n "$BI_HOST" ]] && s+="  $(t bk_from_pc "$BI_HOST")"
+        t bk_source "$s"
+    else t bk_source_unknown; fi
+}
 # ── Vorhandene Backups ─────────────────────────────────────────────────────────
 cfg_backup_dirs() { [[ -f "$CONFIG_FILE" ]] && grep '^backup=' "$CONFIG_FILE" | cut -d= -f2-; return 0; }
 add_backup_dir() {
@@ -1412,9 +1488,9 @@ fmt_size() {
     else printf '%d B' "$b"; fi
 }
 fmt_time() { date -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$1"; }
-declare -a BK_PATH=() BK_NAME=() BK_TIME=() BK_SIZE=() BK_MBOX=() BK_CONV=() BK_FILES=() BK_SHOTS=()
+declare -a BK_PATH=() BK_NAME=() BK_TIME=() BK_SIZE=() BK_MBOX=() BK_CONV=() BK_FILES=() BK_SHOTS=() BK_SRC=() BK_DATES=()
 find_backups() {
-    BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=()
+    BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=(); BK_SRC=(); BK_DATES=()
     local -a bases=("$HOME/RF4_Backup") cand=() order=()
     local -A seen=()
     local l b c base f m latest size convs files shots i
@@ -1435,14 +1511,16 @@ find_backups() {
             shots=0; [[ -d "$c/Screenshots" ]] && shots=$(find "$c/Screenshots" -type f 2>/dev/null | wc -l | tr -d ' ')
             size=0; latest=0
             while IFS= read -r -d '' f; do size=$((size + $(stat -c %s "$f" 2>/dev/null || stat -f %z "$f" 2>/dev/null || echo 0))); m=$(file_mtime "$f"); (( m > latest )) && latest=$m; done < <(find "$c" -type f -print0 2>/dev/null)
+            read_backup_info "$c"
             BK_PATH+=("$c"); BK_NAME+=("$base"); BK_TIME+=("$latest"); BK_SIZE+=("$size"); BK_MBOX+=("${#MB_NAME[@]}"); BK_CONV+=("$convs"); BK_FILES+=("$files"); BK_SHOTS+=("$shots")
+            BK_SRC+=("$(bk_source_text)"); BK_DATES+=("$(t bk_dates "${BI_CREATED:-?}" "${BI_UPDATED:-$(fmt_time "$latest")}")")
         done
     done
     # neueste zuerst
-    local -a sp=() sn=() st=() ss=() sm=() sc=() sf=() sh=()
-    while IFS=$'\t' read -r _ i; do sp+=("${BK_PATH[$i]}"); sn+=("${BK_NAME[$i]}"); st+=("${BK_TIME[$i]}"); ss+=("${BK_SIZE[$i]}"); sm+=("${BK_MBOX[$i]}"); sc+=("${BK_CONV[$i]}"); sf+=("${BK_FILES[$i]}"); sh+=("${BK_SHOTS[$i]}"); done < <(for i in "${!BK_PATH[@]}"; do printf '%s\t%s\n' "${BK_TIME[$i]}" "$i"; done | sort -rn)
-    BK_PATH=("${sp[@]:-}"); BK_NAME=("${sn[@]:-}"); BK_TIME=("${st[@]:-}"); BK_SIZE=("${ss[@]:-}"); BK_MBOX=("${sm[@]:-}"); BK_CONV=("${sc[@]:-}"); BK_FILES=("${sf[@]:-}"); BK_SHOTS=("${sh[@]:-}")
-    [[ -z "${BK_PATH[0]:-}" ]] && { BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=(); }
+    local -a sp=() sn=() st=() ss=() sm=() sc=() sf=() sh=() sr=() sd=()
+    while IFS=$'\t' read -r _ i; do sp+=("${BK_PATH[$i]}"); sn+=("${BK_NAME[$i]}"); st+=("${BK_TIME[$i]}"); ss+=("${BK_SIZE[$i]}"); sm+=("${BK_MBOX[$i]}"); sc+=("${BK_CONV[$i]}"); sf+=("${BK_FILES[$i]}"); sh+=("${BK_SHOTS[$i]}"); sr+=("${BK_SRC[$i]}"); sd+=("${BK_DATES[$i]}"); done < <(for i in "${!BK_PATH[@]}"; do printf '%s\t%s\n' "${BK_TIME[$i]}" "$i"; done | sort -rn)
+    BK_PATH=("${sp[@]:-}"); BK_NAME=("${sn[@]:-}"); BK_TIME=("${st[@]:-}"); BK_SIZE=("${ss[@]:-}"); BK_MBOX=("${sm[@]:-}"); BK_CONV=("${sc[@]:-}"); BK_FILES=("${sf[@]:-}"); BK_SHOTS=("${sh[@]:-}"); BK_SRC=("${sr[@]:-}"); BK_DATES=("${sd[@]:-}")
+    [[ -z "${BK_PATH[0]:-}" ]] && { BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=(); BK_SRC=(); BK_DATES=(); }
     return 0
 }
 bk_info() {   # bk_info index
@@ -1516,6 +1594,7 @@ do_backup() {
     info "$(t from "$src")"; info "$(t to "$dest")"; sep
     reset_stats
     copy_rf4data "$src" "$dest" "$items" "$ACCOUNTS" "$(screenshot_dir "$src")" "$dest/Screenshots" ""
+    write_backup_info "$dest" "$si" "$items"
     add_backup_dir "$dest"
     echo; ok "$(t backup_done "$dest")"; print_summary
     pause
@@ -1528,7 +1607,7 @@ do_restore() {
     find_backups
     if (( ${#BK_PATH[@]} > 0 )); then
         local -a bopts=()
-        for bi in "${!BK_PATH[@]}"; do bopts+=("${BK_NAME[$bi]}   $G_DOT   $(fmt_time "${BK_TIME[$bi]}")"$'\n'"        ${BK_PATH[$bi]}"$'\n'"        $(bk_info "$bi")"); done
+        for bi in "${!BK_PATH[@]}"; do bopts+=("${BK_NAME[$bi]}"$'\n'"        ${BK_PATH[$bi]}"$'\n'"        ${BK_SRC[$bi]}"$'\n'"        $(bk_info "$bi")"$'\n'"        ${BK_DATES[$bi]}"); done
         bopts+=("$(t manual_path)")
         menu "$(t pick_backup_list)" "${bopts[@]}"; (( MENU_CHOICE == 0 )) && return
         (( MENU_CHOICE <= ${#BK_PATH[@]} )) && src="${BK_PATH[$((MENU_CHOICE - 1))]}"

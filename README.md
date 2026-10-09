@@ -51,7 +51,7 @@ Spielstand, Inventar und Angelausrüstung liegen auf den RF4-Servern und sind au
 
 | Variante | Für wen | So geht’s |
 |---|---|---|
-| **Installer** (`rf4sa-backup-full-setup-v1.5.0.exe`) | Windows, empfohlen | Doppelklick, weiter, fertig. Legt Startmenü-Einträge (GUI, Terminal, **Deinstallieren**) an. Kein Admin nötig. |
+| **Installer** (`rf4sa-backup-full-setup-v1.5.0.exe`) | Windows, empfohlen | Doppelklick, weiter, fertig. Legt Startmenü-Einträge (GUI, Terminal, **Anleitung mit Screenshots**, **Deinstallieren**) an; eine Seite mit **anklickbaren Links** (Spenden, Blog, Download, Quellcode) gehört dazu. Kein Admin nötig. |
 | `rf4sa-backup-gui-setup-…` / `…-cli-setup-…` | nur GUI bzw. nur Terminal | wie oben |
 | **Ohne Installer** | Windows | Rechtsklick auf `rf4sa-backup-gui.ps1` → **Mit PowerShell ausführen** |
 | **Linux / macOS** | Bash | `bash rf4sa-backup.sh` (benötigt bash ≥ 4 und `python3`) |
@@ -82,7 +82,7 @@ Vier Karten: Backup erstellen · Backup wiederherstellen · Installationen zusam
 
 ![Backup](docs/img/dark-de-backup.png)
 
-**Backup wiederherstellen:** Oben siehst du alle **vorhandenen Backups** (Standardordner, früher benutzte Ordner und deren Unterordner) mit Inhalt, Größe und Datum — das neueste zuerst. Mit *Anderen Ordner wählen…* nimmst du ein Backup von woanders (z. B. vom USB-Stick). Dann Ziel-Installation wählen; angehakt ist automatisch alles, was das Backup enthält.
+**Backup wiederherstellen:** Oben siehst du alle **vorhandenen Backups** (Standardordner, früher benutzte Ordner und deren Unterordner) mit Inhalt, Größe und Datum — das neueste zuerst. Zu jedem Backup steht, **von welcher Installation** und **von wann** es stammt (Quelle, PC-Name, erstellt/aktualisiert — gespeichert in `rf4-backup.info` im Backup-Ordner). Mit *Anderen Ordner wählen…* nimmst du ein Backup von woanders (z. B. vom USB-Stick). Dann Ziel-Installation wählen; angehakt ist automatisch alles, was das Backup enthält.
 
 ![Restore](docs/img/dark-de-restore.png)
 
@@ -260,7 +260,8 @@ Unter Linux liegt derselbe Pfad im jeweiligen Wine-/Proton-Prefix (`…/drive_c/
 - **Es wird nichts gelöscht** — weder Spieldaten noch Backups noch der Undo-Ordner.
 - Scan und Backup **lesen nur** aus der Installation.
 - Schreibende Aktionen (Restore/Merge/Sync) kopieren ersetzte Dateien vorher in den Undo-Ordner; Nachrichten-Dateien werden atomar mit Gegenprobe geschrieben und nur bei echten Änderungen.
-- Vor Restore/Merge/Sync wird geprüft, ob RF4 läuft (Warnung).
+- Vor Restore/Merge/Sync wird geprüft, ob RF4 läuft (Warnung) — nur der Spielprozess (`rf4_x64`/`rf4_x32`) zählt, ein offener Launcher oder Installer löst keine Warnung aus.
+- Unerwartete Fehler lassen das Programm nicht mehr abstürzen: es zeigt eine Meldung und schreibt Details nach `%APPDATA%\rf4-backup\error.log`.
 - Kein Netzwerkzugriff, keine Telemetrie. Der Quellcode ist vollständig lesbar (die ausgelieferten `.ps1`/`.sh`-Dateien sind der Code).
 
 **Prüfsummen:** siehe [CHECKSUMS.txt](CHECKSUMS.txt).
@@ -290,6 +291,9 @@ RF4 muss **beendet** gewesen sein, als du importiert hast. Importiere erneut (id
 
 **中文 / Русский zeigt Kästchen im Terminal**
 Windows Terminal verwenden oder eine Schriftart mit CJK/Kyrillisch wählen. Die GUI ist davon nicht betroffen.
+
+**Die Liste zeigt nicht alle Einträge**
+Sie ist scrollbar: Mausrad (auch direkt über einem Eintrag) oder der Scrollbalken rechts. Das Fenster lässt sich vergrößern.
 
 **Die GUI ist zu groß für meinen Bildschirm**
 Die Startgröße richtet sich nach dem Bildschirm; das Fenster ist in der Größe veränderbar, der Inhalt scrollt bei Platzmangel.
@@ -344,7 +348,10 @@ powershell -ExecutionPolicy Bypass -File tests\Test-Core.ps1 [-RealDataDir <Mail
 powershell -ExecutionPolicy Bypass -File tests\Test-Cli.ps1                                    # Terminal: alle Sprachen, Rahmenbreite, Abläufe
 powershell -STA -ExecutionPolicy Bypass -File tests\Test-Gui.ps1                               # GUI: Panels × Design × Sprache × Skalierung, Überlauf, Abläufe, Screenshots
 bash tests/test-sh.sh                                                                          # Linux-Skript
+powershell -STA -ExecutionPolicy Bypass -File tests\Test-RealFlow.ps1                       # alle Funktionen mit echten Dialogen auf Fake-Installationen im echten Profil
 ```
+
+**Gefahrlos mit realistischen Daten testen:** `tools\fake-installs.ps1 -Create` legt aus einer echten Installation die Fake-Installationen `RussianFishing4TEST_A/_B/_C` an (überlappende Konversationen, zweiter Account, abweichende Einstellungen); `-Remove` löscht nur solche mit Marker-Datei. Die Originale werden nie verändert.
 
 Neuer Text: Schlüssel in **alle** `src/lang/*.lang` eintragen (Tests prüfen, dass jeder Schlüssel in jeder eingebauten Sprache vorhanden ist und die Platzhalter übereinstimmen), dann `build.ps1`.
 Installer: `installer/*.iss` mit [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`ISCC.exe installer\rf4sa-backup-full.iss`).
@@ -359,7 +366,10 @@ Installer: `installer/*.iss` mit [Inno Setup 6](https://jrsoftware.org/isinfo.ph
 - **Modular:** Sprachen als `lang/*.lang`, Designs als `themes/*.theme` — eigene Dateien werden automatisch erkannt.
 - **Terminal und Bash:** Rahmen/Symbole (CJK-breitenrichtig), farbige Zusammenfassung, ASCII-Fallback.
 - **Deinstallation:** Startmenü-Eintrag und Abfrage zu den gespeicherten Einstellungen; Beispiel-Vorlagen unter `examples/`.
-- Mehr Tests (Core 98, Terminal 35, GUI 61, Bash 89) inkl. Kontrastprüfung der Designs.
+- **Backup-Info:** jedes Backup merkt sich Quelle (Installation, PC) und Zeitpunkte; Anzeige in GUI, Terminal und Bash.
+- **Fix:** Der Meldungsdialog (zum Beispiel die RF4-läuft-Warnung) stürzte mit einem .NET-Fehler ab und brach Restore/Merge/Sync ab; ein offener Launcher löste die Warnung fälschlich aus; das Mausrad scrollte Listen nicht.
+- Anleitung als HTML (mit Screenshots) im Startmenü, anklickbare Links im Installer, klickbarer Spenden-Link in der GUI.
+- Mehr Tests (Core 116, Terminal 42, GUI 74, Bash 108, Echtdaten-Durchlauf 36) inkl. Kontrastprüfung der Designs.
 
 **1.4.0** gemeinsamer Kern, komplette Übersetzung (DE/EN/ZH/RU), Fixes (eigene Installation wurde nie gefunden, Abstürze bei einzelnen Dateien, Screenshots beim Restore), Undo-Ordner, Warnung bei laufendem RF4.
 **1.3.0** i18n (nur Menüs), InnoSetup-Installer · **1.2.0** Cloud/NAS-Sync · **1.1.x** Account-IDs, Multi-Quellen-Merge · **1.0.0** Erstveröffentlichung

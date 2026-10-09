@@ -200,7 +200,8 @@ function Get-Dats([string]$dir) {
     @(Get-ChildItem -LiteralPath $dir -Filter '*.dat' -File -ErrorAction SilentlyContinue)
 }
 function Test-Rf4Running {
-    $p = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(rf4|RussianFishing)' })
+    if ($env:RF4_FAKE_RUNNING) { return $env:RF4_FAKE_RUNNING }   # Test-Hook
+    $p = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^rf4_x(32|64)$' })
     if ($p.Count -eq 0) { return $null }
     return (($p | Select-Object -ExpandProperty Name -Unique) -join ', ')
 }
@@ -325,6 +326,9 @@ function Get-InstLabel($inst) {
         'local' { "$($inst.Where1) / $($inst.Where2)" }
         'user'  { T 'w_user' @($inst.Where1) }
         'drive' { T 'w_drive' @($inst.Where1, $inst.Where2) }
+        'win'    { T 'w_win' @($inst.Where1, $inst.Where2) }
+        'wine'   { T 'w_wine' @($inst.Where2) }
+        'proton' { T 'w_proton' @($inst.Where1) }
         default { T 'w_extra' @($inst.Where1) }
     }
     return "$name [$where]"
@@ -378,6 +382,7 @@ function Merge-Mailbox {
         if (-not (Test-Path -LiteralPath $dstFile)) {
             Copy-Item -LiteralPath $srcFile.FullName -Destination $dstFile
             $r.Copied++
+            try { $ci = (Read-JsonFile $srcFile.FullName).PSObject.Properties['items']; if ($ci -and $null -ne $ci.Value) { $r.Added += @($ci.Value).Count } } catch { }
             continue
         }
         try {
@@ -486,6 +491,64 @@ function Test-LooksLikeBackup([string]$dir) {
     foreach ($f in $script:DatFiles) { if (Test-Path -LiteralPath (Join-Path $dir $f)) { return $true } }
     return (Test-Path -LiteralPath (Join-Path $dir 'Screenshots') -PathType Container)
 }
+# ── Backup-Info (von wann, von welcher Installation) ────────────────────────────
+# Datei rf4-backup.info im Backup-Ordner, Format key=value (sprachneutral; auch vom Bash-Skript lesbar/schreibbar)
+function Get-BackupInfoFile([string]$dir) { Join-Path $dir 'rf4-backup.info' }
+function Read-BackupInfo([string]$dir) {
+    $f = Get-BackupInfoFile $dir
+    if (-not (Test-Path -LiteralPath $f)) { return $null }
+    try {
+        $o = @{ history = @() }
+        foreach ($line in [IO.File]::ReadAllLines($f, [Text.Encoding]::UTF8)) {
+            $l = $line.TrimStart([char]0xFEFF); if ($l.Length -eq 0 -or $l[0] -eq '#') { continue }
+            $eq = $l.IndexOf('='); if ($eq -lt 1) { continue }
+            $k = $l.Substring(0, $eq).Trim(); $v = $l.Substring($eq + 1)
+            if ($k -eq 'history') { $o.history += $v } else { $o[$k] = $v }
+        }
+        return [pscustomobject]@{
+            Created = [string]$o['created']; Updated = [string]$o['updated']; Host = [string]$o['host']; Tool = [string]$o['tool']
+            Variant = [string]$o['variant']; Folder = [string]$o['folder']; WhereType = [string]$o['wtype']; Where1 = [string]$o['w1']; Where2 = [string]$o['w2']
+            SourcePath = [string]$o['srcpath']; Items = [string]$o['items']; History = @($o.history)
+        }
+    } catch { return $null }
+}
+function Write-BackupInfo([string]$Dest, $Inst, [string[]]$Items) {
+    try {
+        $now = Get-Date -Format 'yyyy-MM-dd HH:mm'
+        $old = Read-BackupInfo $Dest
+        $created = if ($old -and $old.Created) { $old.Created } else { $now }
+        $hist = @("$now|$($Inst.Variant)|$($Inst.Folder)|$env:COMPUTERNAME") + @($(if ($old) { $old.History } else { @() }))
+        $lines = @('# RF4 Backup Tool - Informationen zu diesem Backup (von wann, von welcher Installation)',
+            "created=$created", "updated=$now", "tool=$script:ToolVersion", "host=$env:COMPUTERNAME", "user=$env:USERNAME",
+            "variant=$($Inst.Variant)", "folder=$($Inst.Folder)", "wtype=$($Inst.WhereType)", "w1=$($Inst.Where1)", "w2=$($Inst.Where2)", "srcpath=$($Inst.Path)", "items=$($Items -join ',')")
+        foreach ($h in ($hist | Select-Object -First 10)) { $lines += "history=$h" }
+        New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+        [IO.File]::WriteAllText((Get-BackupInfoFile $Dest), (($lines -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding($true)))
+    } catch { }
+}
+function Get-BackupSourceLabel($info) {
+    if (-not $info -or -not $info.Variant) { return (T 'bk_source_unknown') }
+    $pseudo = [pscustomobject]@{ Variant = $info.Variant; Folder = $info.Folder; WhereType = $(if ($info.WhereType) { $info.WhereType } else { 'extra' }); Where1 = $info.Where1; Where2 = $info.Where2 }
+    $s = Get-InstLabel $pseudo
+    if ($info.Host) { $s += '  ' + (T 'bk_from_pc' @($info.Host)) }
+    return (T 'bk_source' @($s))
+}
+function Format-BackupDates($bk) {
+    $c = if ($bk.Created) { $bk.Created } else { '?' }; $u = if ($bk.Updated) { $bk.Updated } else { $bk.Time.ToString('yyyy-MM-dd HH:mm') }
+    return (T 'bk_dates' @($c, $u))
+}
+function Get-BackupEntry([string]$c) {
+    $bc = Get-BackupContents $c
+    $files = @(Get-ChildItem -LiteralPath $c -Recurse -File -ErrorAction SilentlyContinue)
+    $size = 0L; $latest = [datetime]::MinValue
+    foreach ($fi in $files) { $size += $fi.Length; if ($fi.LastWriteTime -gt $latest) { $latest = $fi.LastWriteTime } }
+    $convs = 0; foreach ($m in $bc.Mailboxes) { $convs += $m.Convs }
+    $inf = Read-BackupInfo $c
+    return [pscustomobject]@{ Path = $c; Name = (Split-Path $c -Leaf); Time = $latest; SizeBytes = $size; Mailboxes = $bc.Mailboxes.Count; Convs = $convs; Files = $bc.Files; Shots = $bc.Shots
+        Info = $inf; Created = $(if ($inf) { $inf.Created } else { '' }); Updated = $(if ($inf) { $inf.Updated } else { '' }); SourceLabel = (Get-BackupSourceLabel $inf) }
+}
+# Mehrzeiliger Beschreibungstext eines Backups (für Karten/Menüs)
+function Format-BackupCard($bk) { return ($bk.Path + "`n" + $bk.SourceLabel + "`n" + (Format-BackupInfo $bk) + "`n" + (Format-BackupDates $bk)) }
 function Find-Backups {
     $bases = New-Object System.Collections.Generic.List[string]
     $bases.Add((Get-DefaultBackupDir))
@@ -500,12 +563,7 @@ function Find-Backups {
             $norm = $c.TrimEnd('\').ToLowerInvariant()
             if ($seen.Contains($norm) -or -not (Test-LooksLikeBackup $c)) { continue }
             [void]$seen.Add($norm)
-            $bc = Get-BackupContents $c
-            $files = @(Get-ChildItem -LiteralPath $c -Recurse -File -ErrorAction SilentlyContinue)
-            $size = 0L; $latest = [datetime]::MinValue
-            foreach ($fi in $files) { $size += $fi.Length; if ($fi.LastWriteTime -gt $latest) { $latest = $fi.LastWriteTime } }
-            $convs = 0; foreach ($m in $bc.Mailboxes) { $convs += $m.Convs }
-            $found.Add([pscustomobject]@{ Path = $c; Name = (Split-Path $c -Leaf); Time = $latest; SizeBytes = $size; Mailboxes = $bc.Mailboxes.Count; Convs = $convs; Files = $bc.Files; Shots = $bc.Shots })
+            $found.Add((Get-BackupEntry $c))
         }
     }
     return @($found | Sort-Object Time -Descending)

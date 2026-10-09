@@ -15,13 +15,13 @@ DefaultDirName={autopf}\RF4BackupTool
 DefaultGroupName=RF4 Backup Tool
 AllowNoIcons=yes
 LicenseFile=../LICENSE
-InfoAfterFile=README.txt
 OutputDir=output
 OutputBaseFilename=rf4sa-backup-full-setup-v1.5.0
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+DisableWelcomePage=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -48,10 +48,9 @@ Source: "../rf4sa-backup-gui.ps1"; DestDir: "{app}"; Flags: ignoreversion; Compo
 Source: "../rf4sa-backup.ps1";     DestDir: "{app}"; Flags: ignoreversion; Components: cli
 Source: "../rf4sa-backup.sh";      DestDir: "{app}"; Flags: ignoreversion; Components: bash
 Source: "../LICENSE";               DestDir: "{app}"; Flags: ignoreversion
-Source: "README.txt";            DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "README.txt";            DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{cm:UninstallLink}"; Filename: "{uninstallexe}"
 Name: "{group}\RF4 Backup Tool (GUI)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\rf4sa-backup-gui.ps1"""; WorkingDir: "{app}"; Components: gui
 Name: "{group}\RF4 Backup Tool (Terminal)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup.ps1'"""; WorkingDir: "{app}"; Components: cli
 Name: "{autodesktop}\RF4 Backup Tool (GUI)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\rf4sa-backup-gui.ps1"""; WorkingDir: "{app}"; Tasks: desktopicon; Components: gui

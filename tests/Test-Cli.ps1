@@ -87,6 +87,19 @@ try {
     Ok ($o -match 'Backup' -and $o -match 'Restore') 'Externe Sprache: fehlende Texte fallen auf Englisch zurück'
     Ok (-not ($o -match 'menu_backup')) 'Kein roher Schlüssel sichtbar'
     $o = Run-Cli @('9', 'x', '0') 'en'; Ok ($o -match 'RF4') 'Ungültige Eingaben beenden das Programm nicht'
+
+    Write-Host "`n[8] Backup-Info im Restore + 'RF4 läuft'-Rückfrage" -ForegroundColor Cyan
+    Ok (Test-Path "$bk\rf4-backup.info") 'Backup hat rf4-backup.info geschrieben'
+    $o = Run-Cli @('3', '0', '0') 'en'
+    Ok ($o -match 'Source: ' -and $o -match 'Created: ' -and $o -match 'Updated: ') 'Restore-Liste (en): Quelle, Erstellt, Aktualisiert' ($o -split "`n" | Select-String 'Source|Created|RF4_Backup' | Out-String)
+    $o = Run-Cli @('3', '0', '0') 'de'; Ok ($o -match 'Quelle: ' -and $o -match 'Erstellt: ') 'Restore-Liste (de): Quelle/Erstellt'
+    $o = Run-Cli @('3', '1', '1', 'a', '', 'n', '', '0') 'en' @{ RF4_FAKE_RUNNING = 'rf4_x64' }
+    Ok ($o -match 'seems to be running' -and $o -match 'Cancelled' -and $o -notmatch 'Import finished') 'RF4 läuft + "n": Abbruch ohne Import'
+    $o = Run-Cli @('3', '1', '1', 'a', '', 'y', '', '0') 'en' @{ RF4_FAKE_RUNNING = 'rf4_x64' }
+    Ok ($o -match 'seems to be running' -and $o -match 'Import finished') 'RF4 läuft + "y": Import läuft durch'
+    $o = Run-Cli @('4', '1', '1', '', 'n', '', '0') 'en' @{ RF4_FAKE_RUNNING = 'rf4_x64' }
+    Ok ($o -match 'seems to be running' -and $o -match 'Cancelled') 'Merge: Rückfrage bei laufendem RF4'
+    $o = Run-Cli @('5', '1', '', '0') 'en' @{ RF4_FAKE_RUNNING = 'rf4_x64' }; Ok ($o -match 'RF4') 'Sync-Menü ohne Ordner: kein Absturz'
 }
 finally { [IO.Directory]::Delete($tmp, $true) }
 Write-Host ""

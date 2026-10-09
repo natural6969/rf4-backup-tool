@@ -455,6 +455,7 @@ namespace Rf4Ui
             int y = 0;
             foreach (UCard c in Cards) { c.SetBounds(0, y, Math.Max(10, w), CardHeight); y += CardHeight + Gap; }
             AutoScrollMinSize = new Size(0, Math.Max(0, y - Gap));
+            try { VerticalScroll.SmallChange = Math.Max(20, CardHeight / 2); VerticalScroll.LargeChange = Math.Max(60, CardHeight * 2); } catch { }
             ResumeLayout(false);
         }
         protected override void OnResize(EventArgs e) { base.OnResize(e); LayoutCards(); }
@@ -666,5 +667,23 @@ namespace Rf4Ui
         public ThemedRenderer() : base(new MenuColors()) { RoundedEdges = false; }
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) { e.TextColor = UiTheme.Text; base.OnRenderItemText(e); }
         protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e) { e.ArrowColor = UiTheme.Text; base.OnRenderArrow(e); }
+    }
+
+    // Mausrad: Nachricht an das Steuerelement UNTER dem Mauszeiger leiten (WinForms schickt sie sonst an das fokussierte)
+    public class WheelFilter : IMessageFilter
+    {
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point p);
+        [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
+        static bool installed;
+        public static void Install() { if (!installed) { Application.AddMessageFilter(new WheelFilter()); installed = true; } }
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg != 0x020A) return false;
+            long lp = m.LParam.ToInt64();
+            Point p = new Point((short)(lp & 0xFFFF), (short)((lp >> 16) & 0xFFFF));
+            IntPtr h = WindowFromPoint(p);
+            if (h != IntPtr.Zero && h != m.HWnd && Control.FromHandle(h) != null) { SendMessage(h, m.Msg, m.WParam, m.LParam); return true; }
+            return false;
+        }
     }
 }

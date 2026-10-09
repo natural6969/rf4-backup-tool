@@ -27,7 +27,7 @@ Progress, inventory and tackle live on the RF4 servers and are available automat
 
 | Option | How |
 |---|---|
-| **Installer** `rf4sa-backup-full-setup-v1.5.0.exe` (recommended) | Double-click. Creates Start-menu entries (GUI, terminal, **uninstall**). No admin rights needed. |
+| **Installer** `rf4sa-backup-full-setup-v1.5.0.exe` (recommended) | Double-click. Creates Start-menu entries (GUI, terminal, **guide with screenshots**, **uninstall**) and a page with **clickable links** (donate, blog, download, source). No admin rights needed. |
 | GUI only / terminal only installers | same |
 | **No installer** | Right-click `rf4sa-backup-gui.ps1` → **Run with PowerShell** |
 | **Linux / macOS** | `bash rf4sa-backup.sh` (needs bash ≥ 4 and `python3`) |
@@ -42,7 +42,7 @@ Five steps: **Scan → Action → Selection → Run → Result**. Top right: **l
 ![Scan](docs/img/dark-de-scan.png)
 
 - **Create backup:** pick source, tick what to save (mailboxes, Settings.dat, Preferences.dat, Crafting.dat, screenshots), optionally only one account, choose the target folder.
-- **Restore backup:** the list shows all **existing backups** (default folder, previously used folders and their subfolders) with contents, size and date — newest first. *Choose another folder…* picks one from elsewhere (e.g. a USB stick). Everything contained in the backup is ticked automatically.
+- **Restore backup:** the list shows all **existing backups** (default folder, previously used folders and their subfolders) with contents, size and date — newest first. Every backup shows **which installation it came from and when** (source, PC name, created/updated — stored in `rf4-backup.info` inside the backup folder). *Choose another folder…* picks one from elsewhere (e.g. a USB stick). Everything contained in the backup is ticked automatically.
 - **Merge installations:** choose the target and one or more sources; only missing messages are added.
 - **Cloud/NAS sync:** choose a shared folder (Nextcloud, Syncthing, NAS, USB …) and the installation.
 - **Result:** key figures (messages added, conversations, files copied, screenshots, skipped, errors); *Show details* expands the full log.

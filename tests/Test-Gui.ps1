@@ -30,6 +30,7 @@ $shotsOut = if ($ShotDir) { $ShotDir } else { Join-Path $PSScriptRoot 'shots' };
 
 try {
     . (Join-Path $root 'rf4sa-backup-gui.ps1') -Lang de
+    $script:RealShowMsg = ${function:Show-Msg}     # Original merken (Regressionstest: der echte Dialog)
     $dialogs = New-Object System.Collections.Generic.List[string]
     function Show-Msg([string]$Text, [string]$Kind = 'Warning', [string]$Buttons = 'OK') { $dialogs.Add($Text); if ($Buttons -eq 'YesNo') { return 'Yes' } return 'OK' }
     $form.Show(); [System.Windows.Forms.Application]::DoEvents()
@@ -80,6 +81,7 @@ try {
     $script:state.Action = 'backup'
     $dflt = Get-DefaultBackupDir
     Copy-Rf4Data -SrcDir (Join-Path $base 'RussianFishing4Steam') -DstDir $dflt -Items @('mail', 'Settings.dat') -ShotsSrc '' -ShotsDst '' -Confirm { $true }
+    Write-BackupInfo $dflt (@(Find-Installations | Where-Object { $_.Folder -eq 'RussianFishing4Steam' })[0]) @('mail', 'Settings.dat')
     $shotsCombos = @('dark/de', 'light/de', 'dark/zh', 'light/ru', 'dark/en')
     foreach ($theme in 'dark', 'light') {
         foreach ($lang in $script:Langs) {
@@ -163,7 +165,7 @@ try {
     Ok (@(Get-Mailboxes $bk).Count -eq 2 -and (Test-Path (Join-Path $bk 'Settings.dat')) -and @(Get-ChildItem (Join-Path $bk 'Screenshots') -ea SilentlyContinue).Count -eq 2) 'Backup: 2 Mailboxen, Settings, 2 Screenshots' "mb=$(@(Get-Mailboxes $bk).Count) settings=$(Test-Path (Join-Path $bk 'Settings.dat')) shots=$(@(Get-ChildItem (Join-Path $bk 'Screenshots') -ea SilentlyContinue).Count) log=$($script:RunLog)"
     Ok ($script:state.Step -eq 4 -and $script:statCtls.Count -ge 3) "Ergebnis-Panel mit Kennzahlen ($($script:statCtls.Count) Kacheln)"
     $msgStat = @($script:statCtls | Where-Object { $_.Caption -eq (T 'sum_msgs') })[0]
-    Ok ($msgStat -and $msgStat.Value -eq '0') 'Kennzahl "Nachrichten ergänzt" = 0 (alles neu kopiert, nichts gemergt)'
+    Ok ($msgStat -and $msgStat.Value -eq '12') 'Kennzahl "Nachrichten übertragen" = 12 (6 neu kopierte Dateien × 2)'
     Ok (-not $script:tbDetails.Visible) 'Details sind eingeklappt'
     $script:btnDetails.PerformClick(); Pump
     Ok ($script:tbDetails.Visible -and $script:tbDetails.Text -match '\[OK\]') 'Details ausklappbar, enthalten [OK]-Zeilen'
@@ -219,6 +221,39 @@ try {
     Ok ($dialogs.Count -eq 1 -and $dialogs[0] -eq (T 'pick_item')) 'Backup ohne Auswahl: Hinweis'
     $form.ClientSize = New-Object System.Drawing.Size(((S 880) - 20), (S 560)); Show-Panel { Render-Backup }; Pump
     Ok ($script:pContent.AutoScrollMinSize.Height -gt 0) 'Kleines Fenster: Inhalt scrollbar statt abgeschnitten'
+
+    Write-Host "`n[7] Echter Meldungsdialog, Spenden-Link, Mausrad" -ForegroundColor Cyan
+    foreach ($th in 'dark', 'light') {
+        Save-ThemeChoice $th; Rebuild-All
+        foreach ($case in @(@('YesNo', 'dialog_yes', 'Yes'), @('YesNo', 'dialog_no', 'No'), @('OK', 'dialog_ok', 'OK'))) {
+            $script:wantBtn = T $case[1]
+            $tm = New-Object System.Windows.Forms.Timer; $tm.Interval = 300
+            $tm.Add_Tick({ $tm.Stop(); foreach ($f in @([System.Windows.Forms.Application]::OpenForms)) { if ($f -ne $form) { foreach ($c in $f.Controls) { if ($c -is [Rf4Ui.UButton] -and $c.Text -eq $script:wantBtn) { $c.PerformClick() } } } } })
+            $tm.Start()
+            $res = & $script:RealShowMsg 'Testtext mit Umlauten äöü 中文 Русский' 'Warning' $case[0]
+            $tm.Dispose()
+            Ok ($res -eq $case[2]) "Dialog ($th, $($case[0])): Klick auf '$($script:wantBtn)' → '$res'"
+        }
+    }
+    Save-ThemeChoice 'auto'; Rebuild-All
+    Ok ($script:lblDonate.Cursor -eq [System.Windows.Forms.Cursors]::Hand -and $script:lblDonate.Font.Underline -and $script:lblDonate.Text -match 'paypal\.me') 'Spenden-Link im Kopf: Hand-Cursor, unterstrichen, paypal.me sichtbar'
+    Ok ($script:lblDonate.Left -gt $script:lblSub.Left + 20 -and $script:lblDonate.Right -lt $script:headLang.Left) 'Spenden-Link überlappt nichts'
+    Ok ($script:Tip.GetToolTip($script:lblDonate) -eq 'https://paypal.me/bjoernoppermann') 'Tooltip zeigt die URL'
+    # viele Installationen + kleines Fenster: Liste scrollt per Mausrad (auch über einer Karte)
+    $env:RF4_SCAN_USERS = ''; 1..6 | ForEach-Object { New-Item -ItemType Directory -Force -Path (Join-Path $base "RussianFishing4Extra$_\Mailbox_$_") | Out-Null }
+    $script:state.Installs = $null; $form.ClientSize = New-Object System.Drawing.Size((S 900), (S 520)); Show-Panel { Render-Scan }; Pump
+    $lst = @(Walk $script:pContent | Where-Object { $_ -is [Rf4Ui.UCardList] })[0]
+    Ok ($lst.Cards.Count -ge 8 -and $lst.VerticalScroll.Visible) "Scan mit $($lst.Cards.Count) Einträgen im kleinen Fenster: Scrollbalken sichtbar"
+    Add-Type -Namespace W32t -Name N -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr SendMessage(System.IntPtr h, int m, System.IntPtr w, System.IntPtr l);'
+    $y0 = -$lst.AutoScrollPosition.Y; [void][W32t.N]::SendMessage($lst.Cards[0].Handle, 0x020A, [IntPtr]([int64](-120) -shl 16), [IntPtr]0); Pump
+    $y1 = -$lst.AutoScrollPosition.Y; Ok ($y1 -gt $y0) "Mausrad über einer Karte scrollt nach unten ($y0 → $y1)"
+    [void][W32t.N]::SendMessage($lst.Cards[0].Handle, 0x020A, [IntPtr]([int64](120) -shl 16), [IntPtr]0); Pump
+    Ok ((-$lst.AutoScrollPosition.Y) -lt $y1) 'Mausrad nach oben scrollt zurück'
+    # letzte Karte ist erreichbar
+    $lst.ScrollControlIntoView($lst.Cards[$lst.Cards.Count - 1]); Pump
+    $lastC = $lst.Cards[$lst.Cards.Count - 1]; Ok (($lastC.Bottom + $lst.AutoScrollPosition.Y) -le $lst.ClientSize.Height + 2) 'Letzter Eintrag lässt sich in den sichtbaren Bereich scrollen'
+    1..6 | ForEach-Object { [IO.Directory]::Delete((Join-Path $base "RussianFishing4Extra$_"), $true) }
+    $form.ClientSize = New-Object System.Drawing.Size((S 1000), (S 740))
 }
 finally {
     try { $form.Close(); $form.Dispose() } catch { }

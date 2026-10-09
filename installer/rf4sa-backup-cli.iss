@@ -15,13 +15,13 @@ DefaultDirName={autopf}\RF4BackupTool
 DefaultGroupName=RF4 Backup Tool
 AllowNoIcons=yes
 LicenseFile=../LICENSE
-InfoAfterFile=README.txt
 OutputDir=output
 OutputBaseFilename=rf4sa-backup-cli-setup-v1.5.0
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+DisableWelcomePage=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -35,10 +35,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "../examples/*"; DestDir: "{app}\examples"; Flags: ignoreversion
 Source: "../rf4sa-backup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "../LICENSE";           DestDir: "{app}"; Flags: ignoreversion
-Source: "README.txt";        DestDir: "{app}"; Flags: ignoreversion isreadme
+Source: "README.txt";        DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{cm:UninstallLink}"; Filename: "{uninstallexe}"
 Name: "{group}\RF4 Backup Tool (Terminal)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup.ps1'"""; WorkingDir: "{app}"; Comment: "RF4 Savegame Backup - Terminal"
 Name: "{autodesktop}\RF4 Backup Tool (Terminal)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup.ps1'"""; WorkingDir: "{app}"; Tasks: desktopicon
 
