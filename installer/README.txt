@@ -17,15 +17,17 @@ FUNKTIONEN / FEATURES:
   - Scan: findet alle RF4-Installationen / finds all RF4 installations
   - Backup & Restore: Mailboxen, Settings.dat, Preferences.dat, Crafting.dat, Screenshots
   - Merge: Nachrichten mehrerer Installationen zusammenfuehren (nur fehlende werden ergaenzt)
+  - Restore auch aus Sync-Ordner / NAS; Backups zeigen Quelle + Datum / restore from sync folder or NAS; backups show source + date
+  - Hilfe-Button (GUI) / [H] (Terminal): Anleitung mit Screenshots in der Programmsprache / help opens the guide in the program language (docs\)
   - Cloud / NAS Sync (Nextcloud, Syncthing, Netzlaufwerk, USB ...)
   - Es wird nichts geloescht (Deinstallation: Startmenue-Eintrag, Spieldaten und Backups bleiben). Ersetzte Dateien werden vorher nach
     <Installation>\_rf4tool_undo\<Zeitstempel> kopiert.
     Nothing is deleted. Files that get replaced are copied to _rf4tool_undo first.
 
 VARIANTEN / VARIANTS:
-  - GUI Version:      rf4sa-backup-gui.ps1
-  - Terminal Version: rf4sa-backup.ps1
-  - Linux/Mac Shell:  rf4sa-backup.sh
+  - GUI Version:      rf4sa-backup-gui-v1.5.0.ps1
+  - Terminal Version: rf4sa-backup-v1.5.0.ps1
+  - Linux/Mac Shell:  rf4sa-backup-v1.5.0.sh
 
 AUSFUEHREN / HOW TO RUN:
   Per Startmenue-Verknuepfung, oder Rechtsklick auf die .ps1 Datei -> "Mit PowerShell ausfuehren"

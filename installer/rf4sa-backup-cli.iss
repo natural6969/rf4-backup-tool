@@ -32,6 +32,7 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [InstallDelete]
+Type: files; Name: "{app}\docs\img\*.png"
 ; ältere Programmdateien (ohne Version / frühere Versionen) beim Update entfernen
 Type: files; Name: "{app}\rf4sa-backup-gui.ps1"
 Type: files; Name: "{app}\rf4sa-backup-gui-v*.ps1"

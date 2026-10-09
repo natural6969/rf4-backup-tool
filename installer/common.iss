@@ -39,7 +39,7 @@ russian.InfoGuideLink=Открыть руководство
 
 [Files]
 Source: "../docs/guide.*.html"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "../docs/img/*"; DestDir: "{app}\docs\img"; Flags: ignoreversion
+Source: "../docs/img/*"; DestDir: "{app}\docs\img"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{cm:UninstallLink}"; Filename: "{uninstallexe}"
@@ -54,6 +54,10 @@ Filename: "{app}\docs\guide.en.html"; Description: "{cm:OpenGuide}"; Flags: post
 Filename: "{app}\docs\guide.ru.html"; Description: "{cm:OpenGuide}"; Flags: postinstall shellexec skipifsilent; Languages: russian
 
 [UninstallDelete]
+Type: dirifempty; Name: "{app}\docs\img\de"
+Type: dirifempty; Name: "{app}\docs\img\en"
+Type: dirifempty; Name: "{app}\docs\img\zh"
+Type: dirifempty; Name: "{app}\docs\img\ru"
 Type: dirifempty; Name: "{app}\docs\img"
 Type: dirifempty; Name: "{app}\docs"
 Type: dirifempty; Name: "{app}\examples"
