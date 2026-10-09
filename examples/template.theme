@@ -1,0 +1,19 @@
+# VORLAGE für ein eigenes Theme / TEMPLATE for a custom theme
+# Kopiere nach / copy to:  %APPDATA%\rf4-backup\themes\<name>.theme   (oder neben das Skript: themes\<name>.theme)
+# @base = dark|light (welchen Windows-Modus es bei 'Automatisch' ersetzt). Nicht gesetzte Farben kommen aus dem Dunkel-Theme.
+@code=meinwald
+@name=Wald / Forest
+@base=dark
+bg=#0E1F14
+surface=#16301F
+surface2=#1E4029
+border=#2B5538
+text=#E9F2EA
+muted=#97B3A0
+accent=#9BD36B
+accentHover=#B4E487
+accentText=#10200F
+success=#4FD18B
+warn=#F2C94C
+danger=#FF7A6B
+selection=#245238

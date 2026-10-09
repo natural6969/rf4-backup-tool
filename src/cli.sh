@@ -18,8 +18,10 @@ set -uo pipefail
 shopt -u patsub_replacement 2>/dev/null || true   # '&' in Ersetzungstexten nicht speziell behandeln (bash 5.2+)
 
 TOOL_VERSION="@@VERSION@@"
-LANGS=(de en zh ru)
-declare -A LANG_NAMES=([de]="Deutsch" [en]="English" [zh]="中文" [ru]="Русский")
+# UTF-8 sicherstellen (Rahmen, 中文, Русский): bei LANG=C auf C.UTF-8 ausweichen
+if [[ "$(locale charmap 2>/dev/null)" != "UTF-8" ]]; then export LC_ALL=C.UTF-8 2>/dev/null; fi
+LANGS=()
+declare -A LANG_NAMES=()
 DAT_FILES=(Settings.dat Preferences.dat Crafting.dat)
 
 # ── Übersetzungen (generiert aus src/core.ps1 – eine Quelle für Windows und Linux) ──
@@ -27,6 +29,7 @@ declare -A TX
 # @@STRINGS@@
 
 # ── Konfiguration / Sprache ────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/rf4-backup"
 CONFIG_FILE="$CONFIG_DIR/settings.conf"
 
@@ -42,9 +45,34 @@ cfg_set() {   # cfg_set key value
     { [[ -f "$CONFIG_FILE" ]] && grep -v "^$1=" "$CONFIG_FILE" 2>/dev/null; printf '%s=%s\n' "$1" "$2"; } > "$tmp" || true
     mv "$tmp" "$CONFIG_FILE"
 }
-resolve_lang() {
-    local c="${1:-}"; c="${c,,}"; c="${c:0:2}"
-    case "$c" in de|en|zh|ru) printf '%s' "$c" ;; esac
+resolve_lang() {   # exakt (pt-br), sonst die ersten 2 Zeichen – nur geladene Sprachen
+    local c="${1:-}"; c="${c,,}"; c="${c//_/-}"; c="${c%%.*}"
+    local l
+    for l in "${LANGS[@]}"; do [[ "$l" == "$c" ]] && { printf '%s' "$l"; return; }; done
+    c="${c:0:2}"
+    for l in "${LANGS[@]}"; do [[ "$l" == "$c" ]] && { printf '%s' "$l"; return; }; done
+}
+# Weitere Sprachen: Dateien lang/*.lang neben dem Skript oder in ~/.config/rf4-backup/lang/ (Format key=Text, @code=, @name=)
+load_lang_file() {
+    local f="$1" code="" line k v l known
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"; line="${line#$'\xEF\xBB\xBF'}"
+        [[ -z "$line" || "${line:0:1}" == "#" || "$line" != *=* ]] && continue
+        k="${line%%=*}"; v="${line#*=}"
+        if [[ "${k:0:1}" == "@" ]]; then
+            case "${k:1}" in
+                code) code="${v,,}"; known=0; for l in "${LANGS[@]}"; do [[ "$l" == "$code" ]] && known=1; done; (( known )) || LANGS+=("$code") ;;
+                name) [[ -n "$code" ]] && LANG_NAMES[$code]="$v" ;;
+            esac
+        elif [[ -n "$code" ]]; then TX[$code:$k]="$v"; fi
+    done < "$f"
+}
+load_external_langs() {
+    local d f
+    for d in "$SCRIPT_DIR/lang" "$CONFIG_DIR/lang"; do
+        [[ -d "$d" ]] || continue
+        for f in "$d"/*.lang; do [[ -f "$f" ]] && load_lang_file "$f"; done
+    done
 }
 init_lang() {
     local l
@@ -76,13 +104,51 @@ if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
 else
     R='' G='' Y='' B='' C='' W='' D='' NC=''
 fi
-sep()  { printf '%s\n' "${D}------------------------------------------------------------${NC}"; }
-hdr()  { printf '\n%s\n' "${B}== ${W}$*${B} ==${NC}"; sep; }
-ok()   { printf '%s\n' "  ${G}[OK]${NC} $*"; }
-warn() { printf '%s\n' "  ${Y}[!]${NC} $*"; }
-err()  { printf '%s\n' "  ${R}[X]${NC} $*" >&2; }
-info() { printf '%s\n' "  ${C}-->${NC} $*"; }
+# Unicode-Rahmen/Symbole, wenn das Terminal UTF-8 kann (RF4_ASCII=1 erzwingt ASCII)
+UNI=1
+[[ "${RF4_ASCII:-}" == "1" ]] && UNI=0
+[[ "$(locale charmap 2>/dev/null)" == "UTF-8" ]] || UNI=0
+if (( UNI )); then
+    G_TL='╔' G_TR='╗' G_BL='╚' G_BR='╝' G_H='═' G_V='║' G_LINE='─' G_OK='✔' G_WARN='!' G_ERR='✘' G_INFO='›' G_DOT='·' G_BAR='━' G_ON='■'
+else
+    G_TL='+' G_TR='+' G_BL='+' G_BR='+' G_H='=' G_V='|' G_LINE='-' G_OK='OK' G_WARN='!' G_ERR='X' G_INFO='>' G_DOT='-' G_BAR='=' G_ON='[X]'
+fi
+WIDTH=64
+rep() { local n="$1" s="$2" out="" i; for ((i = 0; i < n; i++)); do out+="$s"; done; printf '%s' "$out"; }
+disp_width() {   # Anzeigebreite: CJK/Fullwidth zählt doppelt
+    local s="$1" w=0 i ch cp
+    for ((i = 0; i < ${#s}; i++)); do
+        ch="${s:i:1}"; printf -v cp '%d' "'$ch" 2>/dev/null || cp=0
+        if (( (cp >= 0x1100 && cp <= 0x115F) || (cp >= 0x2E80 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7A3) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF00 && cp <= 0xFF60) )); then w=$((w + 2)); else w=$((w + 1)); fi
+    done
+    printf '%d' "$w"
+}
+sep()  { printf '%s\n' "  ${C}$(rep $((WIDTH - 4)) "$G_LINE")${NC}"; }
+hdr()  { local t=" $* " fill; fill=$(( WIDTH - 6 - $(disp_width "$t") )); (( fill < 2 )) && fill=2; printf '\n%s\n' "  ${C}$(rep 2 "$G_BAR")${t}$(rep "$fill" "$G_BAR")${NC}"; }
+ok()   { printf '%s\n' "  ${G}${G_OK}${NC} $*"; }
+warn() { printf '%s\n' "  ${Y}${G_WARN}${NC} ${Y}$*${NC}"; }
+err()  { printf '%s\n' "  ${R}${G_ERR}${NC} ${R}$*${NC}" >&2; }
+info() { printf '%s\n' "  ${C}${G_INFO}${NC} $*"; }
 log()  { case "$1" in ok) ok "$2" ;; warn) warn "$2" ;; err) err "$2" ;; *) info "$2" ;; esac; }
+box()  {   # box zeile1 zeile2 …
+    local inner=$((WIDTH - 4)) l pad
+    printf '%s\n' "  ${C}${G_TL}$(rep "$inner" "$G_H")${G_TR}${NC}"
+    for l in "$@"; do pad=$(( inner - 1 - $(disp_width "$l") )); (( pad < 0 )) && pad=0; printf '%s\n' "  ${C}${G_V}${NC} ${l}$(rep "$pad" ' ')${C}${G_V}${NC}"; done
+    printf '%s\n' "  ${C}${G_BL}$(rep "$inner" "$G_H")${G_BR}${NC}"
+}
+# Statistik der letzten Operation
+STAT_MSG=0 STAT_CONV=0 STAT_FILES=0 STAT_SHOTS=0 STAT_SKIP=0 STAT_FAIL=0
+reset_stats() { STAT_MSG=0 STAT_CONV=0 STAT_FILES=0 STAT_SHOTS=0 STAT_SKIP=0 STAT_FAIL=0; }
+print_summary() {
+    echo
+    printf '  %s' "${C}${G_ON} ${STAT_MSG}${NC} $(t sum_msgs)   ${G}${G_ON} ${STAT_CONV}${NC} $(t sum_convs)   ${G}${G_ON} ${STAT_FILES}${NC} $(t sum_files)   "
+    (( STAT_SHOTS > 0 )) && printf '%s' "${G}${G_ON} ${STAT_SHOTS}${NC} $(t sum_shots)   "
+    (( STAT_SKIP > 0 )) && printf '%s' "${Y}${G_ON} ${STAT_SKIP}${NC} $(t sum_skipped)   "
+    (( STAT_FAIL > 0 )) && printf '%s' "${R}${G_ON} ${STAT_FAIL}${NC} $(t sum_failed)   "
+    echo
+    if (( STAT_FAIL > 0 )); then err "$(t res_err "$STAT_FAIL")"; else ok "$(t res_ok)"; fi
+}
+
 pause() { echo; local _x; read -r -p "  $(t continue) " _x || true; }
 
 # ── Eingaben ───────────────────────────────────────────────────────────────────
@@ -323,10 +389,10 @@ merge_mailbox() {   # merge_mailbox srcdir dstdir [undoroot]
     while IFS=$'\t' read -r kind name extra; do
         extra="${extra%$'\r'}"; name="${name%$'\r'}"; kind="${kind%$'\r'}"
         case "$kind" in
-            COPIED)    copied=$((copied + 1)) ;;
+            COPIED)    copied=$((copied + 1)); STAT_CONV=$((STAT_CONV + 1)) ;;
             UNCHANGED) unchanged=$((unchanged + 1)) ;;
-            MERGED)    merged=$((merged + 1)); info "$(t mb_merge_file "$name" "$extra")" ;;
-            FAILED)    failed=$((failed + 1)); warn "$(t mb_merge_fail "$name" "$extra")" ;;
+            MERGED)    merged=$((merged + 1)); STAT_CONV=$((STAT_CONV + 1)); STAT_MSG=$((STAT_MSG + extra)); info "$(t mb_merge_file "$name" "$extra")" ;;
+            FAILED)    failed=$((failed + 1)); STAT_FAIL=$((STAT_FAIL + 1)); warn "$(t mb_merge_fail "$name" "$extra")" ;;
         esac
     done < <(PYTHONIOENCODING=utf-8 "$PYTHON" -c "$PY_MERGE" "$src" "$dst" "$undo" 2>&1)
     ok "$(t mb_summary "$merged" "$copied" "$unchanged")"
@@ -348,12 +414,12 @@ copy_datfile() {   # copy_datfile src dst [undoroot]
     if [[ -f "$dst" ]]; then
         if files_identical "$src" "$dst"; then info "$(t f_identical "$name")"; return; fi
         if ask_overwrite "$name"; then
-            save_undo "$dst" "$undo"; cp -f "$src" "$dst" && ok "$(t f_overwritten "$name")" || err "$(t f_failed "$name" cp)"
-        else warn "$(t f_skipped "$name")"; fi
+            save_undo "$dst" "$undo"; cp -f "$src" "$dst" && { STAT_FILES=$((STAT_FILES + 1)); ok "$(t f_overwritten "$name")"; } || { STAT_FAIL=$((STAT_FAIL + 1)); err "$(t f_failed "$name" cp)"; }
+        else STAT_SKIP=$((STAT_SKIP + 1)); warn "$(t f_skipped "$name")"; fi
         return
     fi
     mkdir -p "$(dirname "$dst")"
-    cp "$src" "$dst" && ok "$(t f_copied "$name")" || err "$(t f_failed "$name" cp)"
+    cp "$src" "$dst" && { STAT_FILES=$((STAT_FILES + 1)); ok "$(t f_copied "$name")"; } || { STAT_FAIL=$((STAT_FAIL + 1)); err "$(t f_failed "$name" cp)"; }
 }
 
 screenshot_dir() {   # screenshot_dir instpath [create]
@@ -372,7 +438,7 @@ copy_screenshots() {   # copy_screenshots srcdir dstdir
         t="$dst/$(basename "$f")"
         [[ -e "$t" ]] || { cp "$f" "$t" && n=$((n + 1)); }
     done < <(find "$src" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print0 2>/dev/null)
-    ok "$(t shots_done "$n" "$dst")"
+    STAT_SHOTS=$((STAT_SHOTS + n)); ok "$(t shots_done "$n" "$dst")"
 }
 
 # Gemeinsam für Backup UND Restore:  copy_rf4data src dst "items" "accounts" shots_src shots_dst undo
@@ -401,6 +467,72 @@ copy_rf4data() {
     if [[ -n "$undo" && -d "$undo" ]]; then info "$(t undo_saved "$undo")"; fi
 }
 
+# ── Vorhandene Backups ─────────────────────────────────────────────────────────
+cfg_backup_dirs() { [[ -f "$CONFIG_FILE" ]] && grep '^backup=' "$CONFIG_FILE" | cut -d= -f2-; return 0; }
+add_backup_dir() {
+    local d="$1" l n=1
+    d="$(cd "$d" 2>/dev/null && pwd -P)" || d="$1"
+    local -a keep=("$d")
+    while IFS= read -r l; do [[ -n "$l" && "$l" != "$d" && n -lt 8 ]] && { keep+=("$l"); n=$((n + 1)); }; done < <(cfg_backup_dirs)
+    mkdir -p "$CONFIG_DIR"
+    { [[ -f "$CONFIG_FILE" ]] && grep -v '^backup=' "$CONFIG_FILE"; for l in "${keep[@]}"; do printf 'backup=%s\n' "$l"; done; } > "$CONFIG_FILE.tmp" || true
+    mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+}
+looks_like_backup() {
+    local d="$1" f
+    [[ -d "$d" ]] || return 1
+    compgen -G "$d/Mailbox_*" >/dev/null 2>&1 && return 0
+    for f in "${DAT_FILES[@]}"; do [[ -f "$d/$f" ]] && return 0; done
+    [[ -d "$d/Screenshots" ]]
+}
+fmt_size() {
+    local b="$1"
+    if (( b >= 1073741824 )); then printf '%d.%d GB' $((b / 1073741824)) $((b % 1073741824 * 10 / 1073741824))
+    elif (( b >= 1048576 )); then printf '%d.%d MB' $((b / 1048576)) $((b % 1048576 * 10 / 1048576))
+    elif (( b >= 1024 )); then printf '%d KB' $((b / 1024))
+    else printf '%d B' "$b"; fi
+}
+fmt_time() { date -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$1"; }
+declare -a BK_PATH=() BK_NAME=() BK_TIME=() BK_SIZE=() BK_MBOX=() BK_CONV=() BK_FILES=() BK_SHOTS=()
+find_backups() {
+    BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=()
+    local -a bases=("$HOME/RF4_Backup") cand=() order=()
+    local -A seen=()
+    local l b c base f m latest size convs files shots i
+    while IFS= read -r l; do [[ -n "$l" ]] && bases+=("$l"); done < <(cfg_backup_dirs)
+    if [[ -n "${RF4_BACKUP_DIRS:-}" ]]; then IFS=':' read -ra cand <<< "$RF4_BACKUP_DIRS"; for l in "${cand[@]}"; do bases+=("$l"); done; fi
+    for b in "${bases[@]}"; do
+        [[ -d "$b" ]] || continue
+        b="${b%/}"
+        for c in "$b" "$b"/*/; do
+            c="${c%/}"; [[ -d "$c" ]] || continue
+            base="$(basename "$c")"
+            [[ "$c" != "$b" && ( "$base" == Mailbox_* || "$base" == "Screenshots" ) ]] && continue
+            [[ -n "${seen[$c]:-}" ]] && continue
+            looks_like_backup "$c" || continue
+            seen[$c]=1
+            load_mailboxes "$c"; convs=0; for m in "${MB_CONVS[@]:-0}"; do convs=$((convs + m)); done
+            files=0; for f in "${DAT_FILES[@]}"; do [[ -f "$c/$f" ]] && files=$((files + 1)); done
+            shots=0; [[ -d "$c/Screenshots" ]] && shots=$(find "$c/Screenshots" -type f 2>/dev/null | wc -l | tr -d ' ')
+            size=0; latest=0
+            while IFS= read -r -d '' f; do size=$((size + $(stat -c %s "$f" 2>/dev/null || stat -f %z "$f" 2>/dev/null || echo 0))); m=$(file_mtime "$f"); (( m > latest )) && latest=$m; done < <(find "$c" -type f -print0 2>/dev/null)
+            BK_PATH+=("$c"); BK_NAME+=("$base"); BK_TIME+=("$latest"); BK_SIZE+=("$size"); BK_MBOX+=("${#MB_NAME[@]}"); BK_CONV+=("$convs"); BK_FILES+=("$files"); BK_SHOTS+=("$shots")
+        done
+    done
+    # neueste zuerst
+    local -a sp=() sn=() st=() ss=() sm=() sc=() sf=() sh=()
+    while IFS=$'\t' read -r _ i; do sp+=("${BK_PATH[$i]}"); sn+=("${BK_NAME[$i]}"); st+=("${BK_TIME[$i]}"); ss+=("${BK_SIZE[$i]}"); sm+=("${BK_MBOX[$i]}"); sc+=("${BK_CONV[$i]}"); sf+=("${BK_FILES[$i]}"); sh+=("${BK_SHOTS[$i]}"); done < <(for i in "${!BK_PATH[@]}"; do printf '%s\t%s\n' "${BK_TIME[$i]}" "$i"; done | sort -rn)
+    BK_PATH=("${sp[@]:-}"); BK_NAME=("${sn[@]:-}"); BK_TIME=("${st[@]:-}"); BK_SIZE=("${ss[@]:-}"); BK_MBOX=("${sm[@]:-}"); BK_CONV=("${sc[@]:-}"); BK_FILES=("${sf[@]:-}"); BK_SHOTS=("${sh[@]:-}")
+    [[ -z "${BK_PATH[0]:-}" ]] && { BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=(); }
+    return 0
+}
+bk_info() {   # bk_info index
+    local i="$1" s
+    s="$(t bk_mailbox_n "${BK_MBOX[$i]}" "${BK_CONV[$i]}")"
+    (( BK_FILES[i] > 0 )) && s+="  $G_DOT  $(t bk_files_n "${BK_FILES[$i]}")"
+    (( BK_SHOTS[i] > 0 )) && s+="  $G_DOT  $(t bk_shots_n "${BK_SHOTS[$i]}")"
+    printf '%s' "$s  $G_DOT  $(fmt_size "${BK_SIZE[$i]}")"
+}
 # ── Auswahl-Helfer ─────────────────────────────────────────────────────────────
 # select_accounts nameprefix titlekey → ACCOUNTS (leer = alle), ACC_BACK=1 bei Zurück
 select_accounts() {   # nutzt MB_* (vorher load_mailboxes)
@@ -463,17 +595,29 @@ do_backup() {
     read -r -p "  $(t backup_dir_p "$def") " dest || dest=""
     [[ -z "$dest" ]] && dest="$def"
     info "$(t from "$src")"; info "$(t to "$dest")"; sep
+    reset_stats
     copy_rf4data "$src" "$dest" "$items" "$ACCOUNTS" "$(screenshot_dir "$src")" "$dest/Screenshots" ""
-    echo; ok "$(t backup_done "$dest")"
+    add_backup_dir "$dest"
+    echo; ok "$(t backup_done "$dest")"; print_summary
     pause
 }
 
 # ── RESTORE ────────────────────────────────────────────────────────────────────
 do_restore() {
     hdr "$(t hdr_restore)"
-    local def="$HOME/RF4_Backup" src
-    read -r -p "  $(t backup_dir_p "$def") " src || src=""
-    [[ -z "$src" ]] && src="$def"
+    local def="$HOME/RF4_Backup" src="" bi
+    find_backups
+    if (( ${#BK_PATH[@]} > 0 )); then
+        local -a bopts=()
+        for bi in "${!BK_PATH[@]}"; do bopts+=("${BK_NAME[$bi]}   $G_DOT   $(fmt_time "${BK_TIME[$bi]}")"$'\n'"        ${BK_PATH[$bi]}"$'\n'"        $(bk_info "$bi")"); done
+        bopts+=("$(t manual_path)")
+        menu "$(t pick_backup_list)" "${bopts[@]}"; (( MENU_CHOICE == 0 )) && return
+        (( MENU_CHOICE <= ${#BK_PATH[@]} )) && src="${BK_PATH[$((MENU_CHOICE - 1))]}"
+    else warn "$(t no_backup_found_cli)"; fi
+    if [[ -z "$src" ]]; then
+        read -r -p "  $(t backup_dir_p "$def") " src || src=""
+        [[ -z "$src" ]] && src="$def"
+    fi
     [[ -d "$src" ]] || { err "$(t folder_missing "$src")"; pause; return; }
     load_mailboxes "$src"
     local -a bk_names=("${MB_NAME[@]}") bk_ids=("${MB_ID[@]}") bk_convs=("${MB_CONVS[@]}") bk_files=()
@@ -509,8 +653,10 @@ do_restore() {
     fi
     confirm_game_closed || { warn "$(t cancelled)"; pause; return; }
     info "$(t importing_to "$dst")"; sep
+    reset_stats
     copy_rf4data "$src" "$dst" "$items" "$ACCOUNTS" "$src/Screenshots" "$(screenshot_dir "$dst" create)" "$(new_undo_root "$dst")"
-    ok "$(t restore_done)"
+    add_backup_dir "$(dirname "$src")"
+    ok "$(t restore_done)"; print_summary
     pause
 }
 
@@ -532,6 +678,7 @@ do_merge() {
     confirm_game_closed || { warn "$(t cancelled)"; pause; return; }
     local dpath="${INST_PATH[$di]}" undo; undo=$(new_undo_root "$dpath")
     info "$(t to "$dpath")"; sep
+    reset_stats
     local k si
     for k in "${MULTI_SEL[@]}"; do
         si="${src_idx[$k]}"
@@ -540,7 +687,7 @@ do_merge() {
         (( ACC_BACK )) && continue
         copy_rf4data "${INST_PATH[$si]}" "$dpath" "mail" "$ACCOUNTS" "" "" "$undo"
     done
-    ok "$(t merge_done)"
+    ok "$(t merge_done)"; print_summary
     pause
 }
 
@@ -627,7 +774,7 @@ do_sync() {
                    ci="${EXIST_IDX[$((MENU_CHOICE - 1))]}"
                fi
                confirm_game_closed || { warn "$(t cancelled)"; pause; continue; }
-               do_sync_run "${INST_PATH[$ci]}" "$sp"
+               reset_stats; do_sync_run "${INST_PATH[$ci]}" "$sp"; print_summary
                pause ;;
             *) warn "$(t invalid)" ;;
         esac
@@ -648,10 +795,8 @@ main_menu() {
     local raw
     while true; do
         [[ -t 1 ]] && clear 2>/dev/null
-        printf '%s\n' "${B}============================================================${NC}"
-        printf '%s\n' "${B}  $(t app_title)   v${TOOL_VERSION}${NC}"
-        printf '%s\n' "${B}============================================================${NC}"
-        printf '%s\n' "  ${D}RF4: nga.li/rf4de | Blog: nga.li/rf4b${NC}" "  ${D}$(t donate)${NC}" ""
+        box "$(t app_title)   v${TOOL_VERSION}" "RF4: nga.li/rf4de  $G_DOT  Blog: nga.li/rf4b" "$(t donate)"
+        echo
         printf '%s\n' "  ${Y}[1]${NC} $(t menu_scan)" "  ${Y}[2]${NC} $(t menu_backup)" "  ${Y}[3]${NC} $(t menu_restore)" \
                       "  ${Y}[4]${NC} $(t menu_merge)" "  ${Y}[5]${NC} $(t menu_sync)" \
                       "  ${Y}[L]${NC} $(t menu_lang) (${LANG_NAMES[$LANG_CODE]})" "  ${Y}[0]${NC} $(t exit)" ""
@@ -673,6 +818,7 @@ while (( $# > 0 )); do
         *) shift ;;
     esac
 done
+load_external_langs
 init_lang "$ARG_LANG"
 if (( SHOW_HELP )); then echo "$(t usage)"; exit 0; fi
 if [[ "${RF4_NO_MAIN:-0}" != "1" ]]; then main_menu; fi

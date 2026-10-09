@@ -1,6 +1,6 @@
-e73b0b97ca410fdd761f629c9a04ff0187467f9a7e06353fe96940180f6f4014  rf4sa-backup-gui.ps1
-c5b2b12aa1721b776ed2d5342a5a21275efb61f6ff14f98510a1ea76c4c70118  rf4sa-backup.ps1
-99106236fbba214cfb7be26fde37581fc8ae71fc1128ad5a0ef841b104e40e06  rf4sa-backup.sh
-a3b0ba1e0deb29c9e6dbe4a8fbccaa0596c7bae955c14bc8719efc1dc86a65e1  rf4sa-backup-gui-setup-v1.4.0.exe
-9b1125865ecd1e0a4ac4718a5222b59f1a06533be02b4520ccd8f5c4fca2f768  rf4sa-backup-cli-setup-v1.4.0.exe
-109ab73cafd7ede7ba4ddd3adde2151f9a87885780ae7ccd2b96afd1f183608c  rf4sa-backup-full-setup-v1.4.0.exe
+b20e8bd26b079815c7ebc36546c239452a93b09f2bdbc3561cb21fd51592b421  rf4sa-backup-gui.ps1
+a0f0cd06fde5fddca70c3928e3684f88096a31a4a2512848dbebeca7954c328a  rf4sa-backup.ps1
+d1f4a064fab7366ff1fd5b6a3e3f1218e226133781ecfd569839021a1bc2d671  rf4sa-backup.sh
+bbd98e45bcae2df09d2511d411f76a33b2a0dbc78db42fcf68ffa413d6d086a7  rf4sa-backup-gui-setup-v1.5.0.exe
+7ffad0271665e00184f19ecb6f84e66bd35bfbd619a60008fa0649d72d8998ca  rf4sa-backup-cli-setup-v1.5.0.exe
+0395c5e750bfd0ba9d5d6815e4f5262867678e15999d17ba7d27476948f43a22  rf4sa-backup-full-setup-v1.5.0.exe

@@ -9,13 +9,53 @@ try {
 
 Initialize-Lang $Lang
 
-function Write-Ok($m)   { Write-Host "  [OK] $m" -ForegroundColor Green }
-function Write-Info($m) { Write-Host "  --> $m"  -ForegroundColor Cyan }
-function Write-Warn($m) { Write-Host "  [!] $m"  -ForegroundColor Yellow }
-function Write-Err($m)  { Write-Host "  [X] $m"  -ForegroundColor Red }
-function Write-Sep      { Write-Host ('-' * 60) -ForegroundColor DarkGray }
-function Write-Hdr($t)  { Write-Host ''; Write-Host "== $t ==" -ForegroundColor Blue; Write-Sep }
+# ── Darstellung: Unicode-Rahmen wenn möglich, sonst ASCII (RF4_ASCII=1 erzwingt ASCII) ──
+$script:Uni = ($env:RF4_ASCII -ne '1')
+$script:G = if ($script:Uni) { @{ tl = '╔'; tr = '╗'; bl = '╚'; br = '╝'; h = '═'; v = '║'; line = '─'; ok = '✔'; warn = '!'; err = '✘'; info = '›'; dot = '·'; bar = '━'; on = '■'; off = '□' } }
+            else { @{ tl = '+'; tr = '+'; bl = '+'; br = '+'; h = '='; v = '|'; line = '-'; ok = 'OK'; warn = '!'; err = 'X'; info = '>'; dot = '-'; bar = '='; on = '[X]'; off = '[ ]' } }
+$script:Width = 64
 
+# Anzeigebreite (CJK/Fullwidth = 2 Spalten) – für saubere Rahmen auch in 中文
+function Get-DispWidth([string]$s) {
+    $w = 0
+    foreach ($ch in $s.ToCharArray()) {
+        $c = [int]$ch
+        if (($c -ge 0x1100 -and $c -le 0x115F) -or ($c -ge 0x2E80 -and $c -le 0xA4CF) -or ($c -ge 0xAC00 -and $c -le 0xD7A3) -or ($c -ge 0xF900 -and $c -le 0xFAFF) -or ($c -ge 0xFE30 -and $c -le 0xFE6F) -or ($c -ge 0xFF00 -and $c -le 0xFF60) -or ($c -ge 0xFFE0 -and $c -le 0xFFE6)) { $w += 2 } else { $w += 1 }
+    }
+    return $w
+}
+function Pad-Disp([string]$s, [int]$width) { $d = Get-DispWidth $s; if ($d -ge $width) { return $s }; return $s + (' ' * ($width - $d)) }
+
+function Write-Ok($m)   { Write-Host "  $($script:G.ok) " -ForegroundColor Green -NoNewline; Write-Host $m }
+function Write-Info($m) { Write-Host "  $($script:G.info) " -ForegroundColor Cyan -NoNewline; Write-Host $m }
+function Write-Warn($m) { Write-Host "  $($script:G.warn) " -ForegroundColor Yellow -NoNewline; Write-Host $m -ForegroundColor Yellow }
+function Write-Err($m)  { Write-Host "  $($script:G.err) " -ForegroundColor Red -NoNewline; Write-Host $m -ForegroundColor Red }
+function Write-Sep      { Write-Host ('  ' + ($script:G.line * ($script:Width - 4))) -ForegroundColor DarkCyan }
+function Write-Hdr($t)  {
+    Write-Host ''
+    $inner = ' ' + $t + ' '
+    $fill = [Math]::Max(2, $script:Width - 6 - (Get-DispWidth $inner))
+    Write-Host ('  ' + ($script:G.bar * 2)) -ForegroundColor Cyan -NoNewline; Write-Host $inner -ForegroundColor Cyan -NoNewline; Write-Host ($script:G.bar * $fill) -ForegroundColor Cyan
+}
+function Write-Box([string[]]$lines, [string]$color = 'Cyan') {
+    $inner = $script:Width - 4
+    Write-Host ('  ' + $script:G.tl + ($script:G.h * $inner) + $script:G.tr) -ForegroundColor $color
+    foreach ($l in $lines) { Write-Host ('  ' + $script:G.v) -ForegroundColor $color -NoNewline; Write-Host (' ' + (Pad-Disp $l ($inner - 1))) -NoNewline; Write-Host $script:G.v -ForegroundColor $color }
+    Write-Host ('  ' + $script:G.bl + ($script:G.h * $inner) + $script:G.br) -ForegroundColor $color
+}
+# Kennzahlen nach einer Operation
+function Write-Summary {
+    $st = Get-Stats
+    $items = @(@((T 'sum_msgs'), $st.MsgAdded, 'Cyan'), @((T 'sum_convs'), ($st.ConvNew + $st.ConvMerged), 'Green'), @((T 'sum_files'), ($st.FilesNew + $st.FilesReplaced), 'Green'))
+    if ($st.Shots -gt 0) { $items += , @((T 'sum_shots'), $st.Shots, 'Green') }
+    if ($st.FilesSkipped -gt 0) { $items += , @((T 'sum_skipped'), $st.FilesSkipped, 'Yellow') }
+    if ($st.Failed -gt 0) { $items += , @((T 'sum_failed'), $st.Failed, 'Red') }
+    Write-Host ''
+    Write-Host '  ' -NoNewline
+    foreach ($i in $items) { Write-Host ("$($script:G.on) ") -NoNewline -ForegroundColor $i[2]; Write-Host ("$($i[1]) ") -NoNewline -ForegroundColor $i[2]; Write-Host ("$($i[0])   ") -NoNewline }
+    Write-Host ''
+    if ($st.Failed -gt 0) { Write-Err (T 'res_err' @($st.Failed)) } else { Write-Ok (T 'res_ok') }
+}
 $script:LogSink = {
     param($lvl, $msg)
     switch ($lvl) {
@@ -34,9 +74,9 @@ function Ask-Overwrite($name) {
 }
 
 function Show-Menu([string]$Title, [string[]]$Options) {
-    Write-Host ''; Write-Host "  $Title" -ForegroundColor White; Write-Sep
-    for ($i = 0; $i -lt $Options.Count; $i++) { Write-Host "  [$($i + 1)] $($Options[$i])" -ForegroundColor Yellow }
-    Write-Host "  [0] $(T 'back')" -ForegroundColor Yellow
+    Write-Host ''; Write-Host "  $Title" -ForegroundColor Cyan; Write-Sep
+    for ($i = 0; $i -lt $Options.Count; $i++) { Write-Host "  [$($i + 1)]" -ForegroundColor Yellow -NoNewline; Write-Host " $($Options[$i])" }
+    Write-Host "  [0]" -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'back')"
     Write-Host ''
     while ($true) {
         $raw = Read-Host "  $(T 'choose')"
@@ -52,12 +92,12 @@ function Show-Menu([string]$Title, [string[]]$Options) {
 function Show-MultiSelect([string]$Title, [string[]]$Options) {
     $chosen = New-Object bool[] $Options.Count
     while ($true) {
-        Write-Host ''; Write-Host "  $Title" -ForegroundColor White
-        Write-Host "  $(T 'toggle_hint')" -ForegroundColor DarkGray; Write-Sep
+        Write-Host ''; Write-Host "  $Title" -ForegroundColor Cyan
+        Write-Host "  $(T 'toggle_hint')" -ForegroundColor DarkYellow; Write-Sep
         for ($i = 0; $i -lt $Options.Count; $i++) {
-            $mark = if ($chosen[$i]) { '[X]' } else { '[ ]' }
-            $col = if ($chosen[$i]) { 'Green' } else { 'DarkGray' }
-            Write-Host "  $mark $($i + 1)) $($Options[$i])" -ForegroundColor $col
+            $mark = if ($chosen[$i]) { $script:G.on } else { $script:G.off }
+            if ($chosen[$i]) { Write-Host "  $mark $($i + 1))" -ForegroundColor Green -NoNewline; Write-Host " $($Options[$i])" -ForegroundColor Green }
+            else { Write-Host "  $mark $($i + 1))" -ForegroundColor DarkYellow -NoNewline; Write-Host " $($Options[$i])" }
         }
         Write-Host ''
         $raw = Read-Host "  $(T 'choose')"
@@ -140,9 +180,11 @@ function Do-Backup {
     if ([string]::IsNullOrWhiteSpace($dest)) { $dest = $def }
     Write-Info (T 'from' @($src.Path)); Write-Info (T 'to' @($dest)); Write-Sep
     try {
+        Reset-Stats
         Copy-Rf4Data -SrcDir $src.Path -DstDir $dest -Items $items -Accounts $accounts `
             -ShotsSrc (Get-ScreenshotDir $src.Path) -ShotsDst (Join-Path $dest 'Screenshots') -Confirm { param($n) Ask-Overwrite $n }
-        Write-Host ''; Write-Ok (T 'backup_done' @($dest))
+        Add-BackupDir $dest
+        Write-Host ''; Write-Ok (T 'backup_done' @($dest)); Write-Summary
     } catch { Write-Err $_.Exception.Message }
     Pause-Menu
 }
@@ -151,8 +193,18 @@ function Do-Backup {
 function Do-Restore {
     Write-Hdr (T 'hdr_restore')
     $def = Get-DefaultBackupDir
-    $src = Read-Host ('  ' + (T 'backup_dir_p' @($def)))
-    if ([string]::IsNullOrWhiteSpace($src)) { $src = $def }
+    $bks = @(Find-Backups)
+    $src = $null
+    if ($bks.Count -gt 0) {
+        $opts = @($bks | ForEach-Object { "$($_.Name)   $($script:G.dot)   $($_.Time.ToString('yyyy-MM-dd HH:mm'))`n        $($_.Path)`n        $(Format-BackupInfo $_)" }) + @(T 'manual_path')
+        $c = Show-Menu (T 'pick_backup_list') $opts
+        if ($c -eq 0) { return }
+        if ($c -le $bks.Count) { $src = $bks[$c - 1].Path }
+    } else { Write-Warn (T 'no_backup_found_cli') }
+    if (-not $src) {
+        $src = Read-Host ('  ' + (T 'backup_dir_p' @($def)))
+        if ([string]::IsNullOrWhiteSpace($src)) { $src = $def }
+    }
     if (-not (Test-Path -LiteralPath $src)) { Write-Err (T 'folder_missing' @($src)); Pause-Menu; return }
     $bc = Get-BackupContents $src
     if ($bc.Empty) { Write-Warn (T 'no_backup_here'); Pause-Menu; return }
@@ -184,10 +236,12 @@ function Do-Restore {
 
     Write-Info (T 'importing_to' @($dstPath)); Write-Sep
     try {
+        Reset-Stats
         Copy-Rf4Data -SrcDir $src -DstDir $dstPath -Items $items -Accounts $accounts `
             -ShotsSrc (Join-Path $src 'Screenshots') -ShotsDst (Get-ScreenshotDir $dstPath -Create) `
             -Confirm { param($n) Ask-Overwrite $n } -UndoRoot (New-UndoRoot $dstPath)
-        Write-Ok (T 'restore_done')
+        Add-BackupDir (Split-Path $src -Parent)
+        Write-Ok (T 'restore_done'); Write-Summary
     } catch { Write-Err $_.Exception.Message }
     Pause-Menu
 }
@@ -206,7 +260,7 @@ function Do-Merge {
     $sel = Show-MultiSelect (T 'merge_src') @($srcs | ForEach-Object { Get-InstLabel $_ })
     if ($null -eq $sel -or @($sel).Count -eq 0) { Write-Warn (T 'pick_one_src'); Pause-Menu; return }
     if (-not (Confirm-GameClosed)) { Write-Warn (T 'cancelled'); Pause-Menu; return }
-    $undo = New-UndoRoot $dst.Path
+    $undo = New-UndoRoot $dst.Path; Reset-Stats
     Write-Info (T 'to' @($dst.Path)); Write-Sep
     foreach ($ix in $sel) {
         $s = $srcs[$ix]
@@ -215,7 +269,7 @@ function Do-Merge {
         if ($acc -is [string] -and $acc -eq 'BACK') { continue }
         try { Copy-Rf4Data -SrcDir $s.Path -DstDir $dst.Path -Items @('mail') -Accounts $acc -UndoRoot $undo } catch { Write-Err $_.Exception.Message }
     }
-    Write-Ok (T 'merge_done')
+    Write-Ok (T 'merge_done'); Write-Summary
     Pause-Menu
 }
 
@@ -272,7 +326,7 @@ function Do-Sync {
                     $inst = $ex[$c - 1]
                 }
                 if (-not (Confirm-GameClosed)) { Write-Warn (T 'cancelled'); Pause-Menu; continue }
-                try { Invoke-SyncRun -InstPath $inst.Path -SyncBase $sp } catch { Write-Err $_.Exception.Message }
+                try { Reset-Stats; Invoke-SyncRun -InstPath $inst.Path -SyncBase $sp; Write-Summary } catch { Write-Err $_.Exception.Message }
                 Pause-Menu
             }
             default { Write-Warn (T 'invalid') }
@@ -294,19 +348,16 @@ function Do-Language {
 function Show-Main {
     while ($true) {
         try { Clear-Host } catch { }
-        Write-Host ('=' * 60) -ForegroundColor Blue
-        Write-Host ('  ' + (T 'app_title') + '   v' + $script:ToolVersion) -ForegroundColor Blue
-        Write-Host ('=' * 60) -ForegroundColor Blue
-        Write-Host '  RF4: nga.li/rf4de | Blog: nga.li/rf4b' -ForegroundColor DarkGray
-        Write-Host ('  ' + (T 'donate')) -ForegroundColor DarkGray
+        Write-Box @(
+            ((T 'app_title') + '   v' + $script:ToolVersion),
+            ('RF4: nga.li/rf4de  ' + $script:G.dot + '  Blog: nga.li/rf4b'),
+            (T 'donate')
+        ) 'Cyan'
         Write-Host ''
-        Write-Host "  [1] $(T 'menu_scan')"    -ForegroundColor Yellow
-        Write-Host "  [2] $(T 'menu_backup')"  -ForegroundColor Yellow
-        Write-Host "  [3] $(T 'menu_restore')" -ForegroundColor Yellow
-        Write-Host "  [4] $(T 'menu_merge')"   -ForegroundColor Yellow
-        Write-Host "  [5] $(T 'menu_sync')"    -ForegroundColor Yellow
-        Write-Host "  [L] $(T 'menu_lang') ($($script:LangNames[$script:Lang]))" -ForegroundColor Yellow
-        Write-Host "  [0] $(T 'exit')"         -ForegroundColor Yellow
+        $mi = @(@('1', 'menu_scan'), @('2', 'menu_backup'), @('3', 'menu_restore'), @('4', 'menu_merge'), @('5', 'menu_sync'))
+        foreach ($m in $mi) { Write-Host "   [$($m[0])]" -ForegroundColor Yellow -NoNewline; Write-Host " $(T $m[1])" }
+        Write-Host '   [L]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'menu_lang')  " -NoNewline; Write-Host "($($script:LangNames[$script:Lang]))" -ForegroundColor Cyan
+        Write-Host '   [0]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'exit')"
         Write-Host ''
         $raw = Read-Host "  $(T 'choose')"
         if ($null -eq $raw) { return }

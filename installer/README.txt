@@ -1,4 +1,4 @@
-﻿RF4 Backup Tool v1.4.0
+﻿RF4 Backup Tool v1.5.0
 ======================
 Backup- und Migrationstool fuer Russian Fishing 4 (Standalone + Steam)
 Backup & migration tool for Russian Fishing 4 (Standalone + Steam)
@@ -8,12 +8,17 @@ SPRACHEN / LANGUAGES / 语言 / ЯЗЫКИ:
   Deutsch, English, 中文, Русский - umschaltbar im Programm (Sprachwahl oben rechts bzw. Menue [L]).
   Switchable inside the program (language box top right / menu [L]).
 
+DESIGN / THEME:
+  Dunkel und Hell automatisch nach Windows (oder manuell) / dark and light, automatic (or manual).
+  Eigene Sprachen und Designs: Vorlagen im Ordner examples\ / custom languages and themes: templates in examples\
+
 FUNKTIONEN / FEATURES:
+  - Vorhandene Backups werden aufgelistet / existing backups are listed
   - Scan: findet alle RF4-Installationen / finds all RF4 installations
   - Backup & Restore: Mailboxen, Settings.dat, Preferences.dat, Crafting.dat, Screenshots
   - Merge: Nachrichten mehrerer Installationen zusammenfuehren (nur fehlende werden ergaenzt)
   - Cloud / NAS Sync (Nextcloud, Syncthing, Netzlaufwerk, USB ...)
-  - Es wird nichts geloescht. Ersetzte Dateien werden vorher nach
+  - Es wird nichts geloescht (Deinstallation: Startmenue-Eintrag, Spieldaten und Backups bleiben). Ersetzte Dateien werden vorher nach
     <Installation>\_rf4tool_undo\<Zeitstempel> kopiert.
     Nothing is deleted. Files that get replaced are copied to _rf4tool_undo first.
 

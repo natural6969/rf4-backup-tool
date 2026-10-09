@@ -7,7 +7,8 @@
     und synchronisiert Mailboxen, Einstellungen und Screenshots. Es wird nichts gelöscht; ersetzte
     Dateien landen in <Installation>\_rf4tool_undo\<Zeitstempel>.
     Sprachen: Deutsch, English, 中文, Русский (im Programm umschaltbar, oder -Lang de|en|zh|ru,
-    oder Umgebungsvariable RF4_LANG).
+    oder Umgebungsvariable RF4_LANG). Weitere Sprachen/Themes: Dateien in lang\ bzw. themes\
+    neben diesem Skript oder in %APPDATA%\rf4-backup\ ablegen (siehe README).
 .NOTES
     Start: Rechtsklick -> "Mit PowerShell ausführen"  oder  powershell -ExecutionPolicy Bypass -File <Datei>
     Blog: https://nga.li/rf4b | Quellcode: https://nga.li/rf4git | Download: https://nga.li/rf4dl
@@ -15,223 +16,1078 @@
 .LINK
     https://nga.li/rf4b
 #>
-# Version 1.4.0 – 2026-10-09
+# Version 1.5.0 – 2026-10-09
 param([string]$Lang = '')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # ══════════════════════════════════════════════════════════════════════════════
-#  RF4 Backup Tool – gemeinsamer Kern (Logik + Übersetzungen), keine UI
+#  RF4 Backup Tool – gemeinsamer Kern (Logik, Sprachen, Themes), keine UI
 #  Wird von build.ps1 in rf4sa-backup.ps1 (CLI) und rf4sa-backup-gui.ps1 (GUI) eingebettet.
+#  Sprachen:  src\lang\*.lang     (key=Text)          – weitere Sprachen: einfach Datei ablegen
+#  Themes:    src\themes\*.theme  (key=#RRGGBB)       – weitere Themes: einfach Datei ablegen
 # ══════════════════════════════════════════════════════════════════════════════
-$script:ToolVersion = '1.4.0'
+$script:ToolVersion = '1.5.0'
 $script:ToolDate    = '2026-10-09'
-$script:Langs       = @('de', 'en', 'zh', 'ru')
-$script:LangNames   = [ordered]@{ de = 'Deutsch'; en = 'English'; zh = '中文'; ru = 'Русский' }
 $script:DatFiles    = @('Settings.dat', 'Preferences.dat', 'Crafting.dat')
 $script:LogSink     = $null
+$script:Stats       = $null
 
-# ── Übersetzungen ──────────────────────────────────────────────────────────────
-$script:TX = @{}
-function X([string]$k, [string]$de, [string]$en, [string]$zh, [string]$ru) {
-    $script:TX[$k] = @{ de = $de; en = $en; zh = $zh; ru = $ru }
+# ── Daten: Sprachen + Themes (eingebaut + externe Dateien) ─────────────────────
+$script:TX       = @{}                # key -> @{ code = text }
+$script:LangNames = [ordered]@{}      # code -> Anzeigename
+$script:Langs    = @()                # Codes in Anzeige-Reihenfolge
+$script:Themes   = [ordered]@{}       # code -> @{ name; base; colors = @{} }
+$script:EmbeddedData = $null          # setzt build.ps1 (alle lang/themes-Dateien in einem Text)
+
+# ── Sprachen + Themes laden ────────────────────────────────────────────────────
+function ConvertFrom-KvText([string]$text) {
+    $meta = @{}; $items = [ordered]@{}
+    foreach ($raw in ($text -split "`n")) {
+        $line = $raw.TrimEnd("`r")
+        if ($line.Length -eq 0 -or $line[0] -eq '#') { continue }
+        $eq = $line.IndexOf('=')
+        if ($eq -lt 1) { continue }
+        $k = $line.Substring(0, $eq).Trim(); $v = $line.Substring($eq + 1)
+        if ($k[0] -eq '@') { $meta[$k.Substring(1)] = $v.Trim() } else { $items[$k] = $v }
+    }
+    return @{ meta = $meta; items = $items }
 }
+function Add-LangData($p) {
+    $code = ([string]$p.meta['code']).ToLowerInvariant()
+    if (-not $code) { return }
+    if (-not $script:LangNames.Contains($code)) { $script:LangNames[$code] = $(if ($p.meta['name']) { $p.meta['name'] } else { $code }); $script:Langs += $code }
+    elseif ($p.meta['name']) { $script:LangNames[$code] = $p.meta['name'] }
+    foreach ($k in $p.items.Keys) {
+        if (-not $script:TX.ContainsKey($k)) { $script:TX[$k] = @{} }
+        $script:TX[$k][$code] = $p.items[$k]
+    }
+}
+function Add-ThemeData($p) {
+    $code = ([string]$p.meta['code']).ToLowerInvariant()
+    if (-not $code) { return }
+    $colors = @{}; foreach ($k in $p.items.Keys) { if ($p.items[$k] -match '^#[0-9a-fA-F]{6}$') { $colors[$k] = $p.items[$k].Trim() } }
+    $base = if ($p.meta['base'] -eq 'light') { 'light' } else { 'dark' }
+    $script:Themes[$code] = @{ name = $(if ($p.meta['name']) { $p.meta['name'] } else { $code }); base = $base; colors = $colors }
+}
+function Import-DataDir([string]$dir) {
+    if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return }
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $dir 'lang') -Filter '*.lang' -File -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        try { Add-LangData (ConvertFrom-KvText ([IO.File]::ReadAllText($f.FullName, [Text.Encoding]::UTF8).TrimStart([char]0xFEFF))) } catch { }
+    }
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $dir 'themes') -Filter '*.theme' -File -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        try { Add-ThemeData (ConvertFrom-KvText ([IO.File]::ReadAllText($f.FullName, [Text.Encoding]::UTF8).TrimStart([char]0xFEFF))) } catch { }
+    }
+}
+function Initialize-Data {
+    $script:TX = @{}; $script:LangNames = [ordered]@{}; $script:Langs = @(); $script:Themes = [ordered]@{}
+    if ($script:EmbeddedData) {                       # gebautes Skript: alles eingebaut
+        $parts = [regex]::Split($script:EmbeddedData, '(?m)^@@FILE (.+?)\s*$')
+        for ($i = 1; $i -lt $parts.Count; $i += 2) {
+            $kv = ConvertFrom-KvText $parts[$i + 1]
+            if ($parts[$i] -like '*.theme') { Add-ThemeData $kv } else { Add-LangData $kv }
+        }
+    } else {                                          # ungebaut (Tests/Entwicklung): src\lang + src\themes neben core.ps1
+        Import-DataDir $PSScriptRoot
+    }
+    # Externe Erweiterungen: neben dem Skript und im Benutzerprofil
+    if ($script:EmbeddedData -and $PSScriptRoot) { Import-DataDir $PSScriptRoot }
+    if ($env:APPDATA) { Import-DataDir (Join-Path $env:APPDATA 'rf4-backup') }
+    # Reihenfolge: de en zh ru zuerst, dann der Rest alphabetisch
+    $first = @('de', 'en', 'zh', 'ru') | Where-Object { $script:Langs -contains $_ }
+    $rest = @($script:Langs | Where-Object { $first -notcontains $_ } | Sort-Object)
+    $script:Langs = @($first) + $rest
+}
+$script:EmbeddedData = @'
+@@FILE lang/de.lang
+# RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
+# Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
+@code=de
+@name=Deutsch
 
-# Allgemein
-X 'app_title'     'RF4 Backup & Migration'  'RF4 Backup & Migration'  'RF4 备份与迁移'  'RF4 Резервное копирование и перенос'
-X 'donate'        'Spenden: paypal.me/bjoernoppermann' 'Donate: paypal.me/bjoernoppermann' '捐赠: paypal.me/bjoernoppermann' 'Поддержать: paypal.me/bjoernoppermann'
-X 'back'          'Zurück'   'Back'    '返回'   'Назад'
-X 'next'          'Weiter'   'Next'    '下一步' 'Далее'
-X 'exit'          'Beenden'  'Exit'    '退出'   'Выход'
-X 'choose'        'Auswahl'  'Choice'  '选择'   'Выбор'
-X 'continue'      '[Enter] zum Fortfahren' '[Enter] to continue' '按 [Enter] 继续' '[Enter] — продолжить'
-X 'invalid'       'Ungültige Eingabe' 'Invalid input' '输入无效' 'Неверный ввод'
-X 'toggle_hint'   '(Nummer = ein/aus, a = alle, n = keine, Enter = OK, 0 = Zurück)' '(number = toggle, a = all, n = none, Enter = OK, 0 = back)' '(数字 = 切换, a = 全选, n = 全不选, Enter = 确定, 0 = 返回)' '(номер = вкл/выкл, a = все, n = ничего, Enter = ОК, 0 = назад)'
-X 'yes_char'       'j' 'y' 'y' 'д'
-X 'yn_overwrite'   '{0} existiert bereits. Überschreiben? [j/N]' '{0} already exists. Overwrite? [y/N]' '{0} 已存在。是否覆盖？[y/N]' '{0} уже существует. Перезаписать? [д/Н]'
-X 'language'      'Sprache' 'Language' '语言' 'Язык'
-X 'lang_prompt'   'Sprache wählen' 'Choose language' '选择语言' 'Выберите язык'
-X 'lang_changed'  'Sprache geändert.' 'Language changed.' '语言已更改。' 'Язык изменён.'
-X 'running_warn'  'RF4 scheint zu laufen ({0}). Bitte das Spiel VOR Restore/Merge/Sync beenden, sonst werden Änderungen überschrieben.' 'RF4 seems to be running ({0}). Please close the game BEFORE restore/merge/sync, otherwise changes get overwritten.' '检测到 RF4 正在运行 ({0})。请在恢复/合并/同步之前关闭游戏，否则更改会被覆盖。' 'RF4, похоже, запущена ({0}). Закройте игру ПЕРЕД восстановлением/объединением/синхронизацией, иначе изменения будут перезаписаны.'
-X 'running_ask'   'Trotzdem fortfahren?' 'Continue anyway?' '仍要继续吗？' 'Всё равно продолжить?'
-X 'cancelled'     'Abgebrochen.' 'Cancelled.' '已取消。' 'Отменено.'
+acct_line=Account {0}  ({1} Konversationen)
+act_backup=Backup erstellen
+act_backup_d=RF4-Daten (Chats, Einstellungen, Screenshots) in einen Ordner sichern.
+act_merge=Installationen zusammenführen
+act_merge_d=Nachrichten aus anderen Installationen ergänzen – nichts wird überschrieben.
+act_restore=Backup wiederherstellen
+act_restore_d=Gesicherte Daten in eine RF4-Installation importieren. Nachrichten werden zusammengeführt.
+act_sync=Cloud / NAS Sync
+act_sync_d=Mailboxen zwischen PC, Laptop und NAS abgleichen (Nextcloud, Syncthing, Netzlaufwerk, USB).
+all_accts=Alle Accounts ({0})
+app_title=RF4 Backup & Migration
+back=Zurück
+backup_dir=Backup-Ordner
+backup_dir_p=Backup-Ordner [{0}] (Enter = Standard)
+backup_done=Backup fertig: {0}
+bk_mailbox={0}: {1} Konversationen
+bk_shots=Screenshots: {0} Dateien
+btn_browse=Durchsuchen…
+btn_close=Schließen
+btn_home=Zum Start
+btn_open=Ordner öffnen
+cancelled=Abgebrochen.
+choose=Auswahl
+contents=Inhalt:
+continue=[Enter] zum Fortfahren
+donate=Spenden: paypal.me/bjoernoppermann
+enter_path=Pfad eingeben
+exit=Beenden
+f_copied={0} kopiert
+f_failed={0} fehlgeschlagen: {1}
+f_identical={0} identisch, nichts zu tun
+f_missing={0} nicht gefunden
+f_overwritten={0} überschrieben
+f_skipped={0} übersprungen
+folder_missing=Ordner nicht gefunden: {0}
+found_n=Gefunden: {0} Installation(en)
+from=Von: {0}
+hash_click=(Klicken zum Kopieren)
+hash_copied=SHA256-Prüfsumme kopiert:
+hash_label=SHA256: {0}…
+hash_unknown=SHA256: (Pfad unbekannt)
+hdr_backup=BACKUP
+hdr_merge=INSTALLATIONEN MERGEN
+hdr_restore=RESTORE / IMPORT
+hdr_scan=INSTALLATIONEN SCANNEN
+hdr_sync=CLOUD / NAS SYNC
+importing_to=Importiere nach: {0}
+invalid=Ungültige Eingabe
+item_Crafting.dat=Crafting.dat
+item_mail=Mailboxen (private Nachrichten)
+item_Preferences.dat=Preferences.dat
+item_Settings.dat=Settings.dat (Grafik/Audio/Tasten)
+item_shots=Screenshots
+lang_changed=Sprache geändert.
+lang_prompt=Sprache wählen
+language=Sprache
+manual_path=→ Pfad manuell eingeben
+mb_header=Mailbox {0}…
+mb_merge_fail=Merge fehlgeschlagen: {0} – {1}
+mb_merge_file=Merge {0}: +{1} Nachrichten
+mb_summary=Mailbox: {0} gemergt, {1} neu kopiert, {2} unverändert
+menu_backup=Backup – Daten sichern
+menu_lang=Sprache wechseln
+menu_merge=Merge – Installationen zusammenführen
+menu_restore=Restore – Aus Backup importieren
+menu_scan=Scan – Alle Installationen anzeigen
+menu_sync=Sync – Mit Cloud/NAS abgleichen
+merge_done=Merge abgeschlossen.
+merge_dst=Ziel (Hauptinstallation, bleibt erhalten)
+merge_need2=Mindestens 2 vorhandene Installationen nötig.
+merge_nosrc=Keine weiteren Installationen als Quellen verfügbar.
+merge_note=RF4 erlaubt nur den Wechsel Steam → Standalone, nicht umgekehrt. Details: https://nga.li/rf4transfer
+merge_safe=Nur fehlende Nachrichten werden ergänzt. Vorhandene Daten werden nicht überschrieben.
+merge_same=Quelle und Ziel dürfen nicht identisch sein.
+merge_src=Quellen (mehrere möglich)
+merge_src_ctrl=Quellen (Strg+Klick = Mehrfachauswahl)
+merge_src_hdr=Quelle: {0}
+need_python=python3 wird für das Zusammenführen der Nachrichten benötigt (Debian/Ubuntu: sudo apt install python3).
+next=Weiter
+no_backup_here=Kein RF4-Backup in diesem Ordner gefunden.
+no_inst=Keine Installationen gefunden.
+no_mailboxes=Keine Mailboxen gefunden.
+no_path=Kein Pfad angegeben.
+none_found=Keine Installationen gefunden.
+nothing_sel=Nichts ausgewählt.
+pick_action=Bitte eine Aktion wählen.
+pick_backup=Backup-Ordner wählen
+pick_backup_d=Wähle den Ordner, der dein RF4-Backup enthält.
+pick_dst=Bitte Ziel-Installation wählen.
+pick_item=Bitte mindestens eine Option wählen.
+pick_one_src=Bitte mindestens eine Quelle wählen.
+pick_source=Quelle wählen – von welcher Installation sichern?
+pick_src=Bitte eine Quelle wählen.
+pick_target=Ziel-Installation
+restore_done=Import abgeschlossen.
+result_title=Fertig
+run_backup=Backup starten
+run_merge=Merge starten
+run_restore=Restore starten
+running_ask=Trotzdem fortfahren?
+running_warn=RF4 scheint zu laufen ({0}). Bitte das Spiel VOR Restore/Merge/Sync beenden, sonst werden Änderungen überschrieben.
+scan_accounts=Account-IDs: {0}
+scan_empty=(noch nicht vorhanden)
+scan_path=Pfad: {0}
+scan_readonly=Sicher: Das Tool liest nur – Originaldaten werden nicht verändert.
+scan_stats=Mailboxen: {0}  Konversationen: {1}
+scan_total=Gesamt: {0} Pfade geprüft
+scanning=Suche auf allen Laufwerken…
+shots_done=Screenshots: {0} Bilder → {1}
+shots_none=Screenshot-Ordner nicht gefunden
+step1=Scan
+step2=Aktion
+step3=Auswahl
+step4=Ausführen
+step5=Ergebnis
+sync_cfg=Sync-Ordner konfigurieren
+sync_dir_lbl=Sync-Ordner:
+sync_done=Sync abgeschlossen!
+sync_down={0} ← Sync (heruntergeladen)
+sync_down_new={0} ← Sync (Sync neuer)
+sync_enter=Sync-Ordner eingeben (z.B. N:\RF4-Sync, D:\RF4-Sync):
+sync_first=Bitte zuerst den Sync-Ordner konfigurieren.
+sync_hint=Nextcloud-Ordner · NAS-Netzlaufwerk (N:\) · Syncthing-Ordner · USB-Stick
+sync_inst_lbl=Installation:
+sync_intro=Ordnerbasierter Sync – Nextcloud, NAS-Laufwerk, Syncthing, USB, OneDrive.
+sync_local=Lokal:  {0}
+sync_mkfail=Ordner konnte nicht erstellt werden: {0}
+sync_nolocal=Keine lokalen Mailboxen – nur Download wird ausgeführt.
+sync_none=Kein Sync-Ordner konfiguriert.
+sync_noremote=Der Sync-Ordner enthält noch keine Mailboxen anderer Geräte.
+sync_ok=Sync-Ordner: {0}
+sync_p1=Phase 1: Lokal → Sync (neue Nachrichten hochladen)
+sync_p2=Phase 2: Sync → Lokal (neue Nachrichten herunterladen)
+sync_p3=Einstellungen (neuere Version gewinnt)
+sync_pick_dir=Sync-Ordner wählen (z.B. Nextcloud-Ordner oder NAS-Laufwerk)
+sync_remote=Sync:   {0}
+sync_run=Sync jetzt ausführen (bidirektional)
+sync_same={0}: identisch, übersprungen
+sync_saved=Gespeichert: {0}
+sync_st_boxes={0}: {1} Konversationen
+sync_st_log=Letzte Sync-Einträge:
+sync_st_nodir=Noch kein RF4_Sync-Unterordner. Bitte zuerst einen Sync ausführen.
+sync_st_none=Noch keine Mailboxen im Sync-Ordner.
+sync_status=Sync-Status anzeigen
+sync_unreach=Sync-Ordner nicht erreichbar: {0}
+sync_unreach_h=NAS eingebunden? Cloud-Sync aktiv? USB angesteckt?
+sync_up={0} → Sync (hochgeladen)
+sync_up_new={0} → Sync (lokal neuer)
+sync_which=Welche Installation synchronisieren?
+to=Nach: {0}
+toggle_hint=(Nummer = ein/aus, a = alle, n = keine, Enter = OK, 0 = Zurück)
+undo_saved=Ersetzte Dateien gesichert in: {0}
+usage=Aufruf: rf4sa-backup.sh [-l de|en|zh|ru]
+v_DE=RF4 Standalone Deutsch
+v_DE_new=RF4 Standalone Deutsch (neu)
+v_EN=RF4 Standalone Englisch
+v_Other=RF4 ({0})
+v_Steam=RF4 Steam
+w_drive=Laufwerk: {0} / {1}
+w_extra=Pfad: {0}
+w_proton=Proton: AppID {0}
+w_user=Benutzer: {0}
+w_win=Windows: {0} / {1}
+w_wine=Wine: {0}
+what_backup=Was soll gesichert werden?
+what_restore=Was soll importiert werden?
+what_todo=Was möchtest du tun?
+which_acct_b=Welchen Account sichern?
+which_acct_m=Welche Accounts aus dieser Quelle mergen?
+which_acct_r=Welchen Account importieren?
+working=Bitte warten…
+yes_char=j
+yn_overwrite={0} existiert bereits. Überschreiben? [j/N]
 
-# Menü / Aktionen
-X 'menu_scan'     'Scan – Alle Installationen anzeigen' 'Scan – Show all installations' '扫描 – 显示所有安装' 'Сканировать – показать все установки'
-X 'menu_backup'   'Backup – Daten sichern' 'Backup – Save data to a folder' '备份 – 将数据保存到文件夹' 'Резервная копия – сохранить данные в папку'
-X 'menu_restore'  'Restore – Aus Backup importieren' 'Restore – Import from a backup' '恢复 – 从备份导入' 'Восстановить – импорт из резервной копии'
-X 'menu_merge'    'Merge – Installationen zusammenführen' 'Merge – Combine installations' '合并 – 合并多个安装' 'Объединить – слить установки'
-X 'menu_sync'     'Sync – Mit Cloud/NAS abgleichen' 'Sync – Synchronize with cloud/NAS' '同步 – 与云/NAS同步' 'Синхронизация – облако/NAS'
-X 'menu_lang'     'Sprache wechseln' 'Change language' '切换语言' 'Сменить язык'
-X 'act_backup'    'Backup erstellen' 'Create backup' '创建备份' 'Создать резервную копию'
-X 'act_backup_d'  'RF4-Daten (Chats, Einstellungen, Screenshots) in einen Ordner sichern.' 'Save RF4 data (chats, settings, screenshots) to a folder.' '将 RF4 数据（聊天、设置、截图）保存到文件夹。' 'Сохранить данные RF4 (чаты, настройки, скриншоты) в папку.'
-X 'act_restore'    'Backup wiederherstellen' 'Restore backup' '恢复备份' 'Восстановить из копии'
-X 'act_restore_d' 'Gesicherte Daten in eine RF4-Installation importieren. Nachrichten werden zusammengeführt.' 'Import saved data into an RF4 installation. Messages are merged.' '将已保存的数据导入 RF4 安装。消息会被合并。' 'Импортировать сохранённые данные в установку RF4. Сообщения объединяются.'
-X 'act_merge'     'Installationen zusammenführen' 'Merge installations' '合并安装' 'Объединить установки'
-X 'act_merge_d'   'Nachrichten aus anderen Installationen ergänzen – nichts wird überschrieben.' 'Add messages from other installations – nothing is overwritten.' '从其他安装补充消息——不会覆盖任何内容。' 'Добавить сообщения из других установок — ничего не перезаписывается.'
-X 'act_sync'      'Cloud / NAS Sync' 'Cloud / NAS sync' '云 / NAS 同步' 'Синхронизация облако / NAS'
-X 'act_sync_d'    'Mailboxen zwischen PC, Laptop und NAS abgleichen (Nextcloud, Syncthing, Netzlaufwerk, USB).' 'Sync mailboxes between PC, laptop and NAS (Nextcloud, Syncthing, network drive, USB).' '在电脑、笔记本和 NAS 之间同步邮箱（Nextcloud、Syncthing、网络驱动器、USB）。' 'Синхронизация почты между ПК, ноутбуком и NAS (Nextcloud, Syncthing, сетевой диск, USB).'
+# --- GUI / Backups / Ergebnis ---
+overwrite_q={0} existiert bereits.{1}Überschreiben?
+sel_account=Account:
+scan_hint=Das Tool sucht automatisch auf allen Laufwerken nach RF4-Installationen.
+rescan=Neu suchen
+target_none=Keine passende Ziel-Installation vorhanden.
+backup_to=Backup-Zielordner
+preview=Inhalt des Backups:
+undo_hint=Ersetzte Dateien werden vorher nach _rf4tool_undo kopiert.
+theme_label=Design
+theme_auto=Automatisch (wie Windows)
+tip_lang=Sprache ändern
+tip_theme=Design ändern
+bk_mailbox_n={0} Mailboxen · {1} Konversationen
+bk_files_n=Einstellungsdateien: {0}
+bk_shots_n=Screenshots: {0}
+existing_backups=Vorhandene Backups
+no_existing_backups=Noch keine Backups gefunden – wähle einen Ordner.
+other_folder=Anderen Ordner wählen…
+last_change=Zuletzt geändert: {0}
+chip_found=vorhanden
+chip_missing=nicht vorhanden
+convs_short=Konversationen
+sum_msgs=Nachrichten ergänzt
+sum_convs=Konversationen
+sum_files=Dateien kopiert
+sum_shots=Screenshots
+sum_skipped=übersprungen
+sum_failed=Fehler
+show_details=Details anzeigen
+hide_details=Details ausblenden
+res_ok=Fertig – ohne Fehler.
+res_err=Abgeschlossen, aber mit {0} Fehler(n). Details ansehen.
+working_title=Bitte nicht schließen – das kann einen Moment dauern.
+btn_done=Fertig
+btn_start_over=Neue Aktion
+hdr_scan_t=Installationen
+hdr_action_t=Was möchtest du tun?
+hdr_backup_t=Backup erstellen
+hdr_restore_t=Backup wiederherstellen
+hdr_merge_t=Installationen zusammenführen
+hdr_sync_t=Cloud / NAS Sync
+to_target=Ziel
+no_backup_found_cli=Keine Backups in den üblichen Ordnern – Pfad eingeben.
+pick_backup_list=Backup wählen
+theme_name_dark=Dunkel (Marine)
+theme_name_light=Hell
+open_folder_tip=Öffnet den Ordner im Explorer
+accounts_all=Alle Accounts
+tip_card_select=Zum Auswählen anklicken
+select_backup_first=Bitte zuerst ein Backup wählen.
+sync_run_btn=Sync starten
+sync_status_btn=Status anzeigen
+dialog_yes=Ja
+dialog_no=Nein
+dialog_ok=OK
+@@FILE lang/en.lang
+# RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
+# Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
+@code=en
+@name=English
 
-# Scan
-X 'hdr_scan'      'INSTALLATIONEN SCANNEN' 'SCAN INSTALLATIONS' '扫描安装' 'ПОИСК УСТАНОВОК'
-X 'scanning'      'Suche auf allen Laufwerken…' 'Searching all drives…' '正在搜索所有驱动器…' 'Поиск на всех дисках…'
-X 'none_found'    'Keine Installationen gefunden.' 'No installations found.' '未找到安装。' 'Установки не найдены.'
-X 'found_n'       'Gefunden: {0} Installation(en)' 'Found: {0} installation(s)' '已找到：{0} 个安装' 'Найдено установок: {0}'
-X 'scan_path'     'Pfad: {0}' 'Path: {0}' '路径: {0}' 'Путь: {0}'
-X 'scan_stats'    'Mailboxen: {0}  Konversationen: {1}' 'Mailboxes: {0}  Conversations: {1}' '邮箱: {0}  对话: {1}' 'Ящиков: {0}  Диалогов: {1}'
-X 'scan_accounts' 'Account-IDs: {0}' 'Account IDs: {0}' '账号 ID: {0}' 'ID аккаунтов: {0}'
-X 'scan_empty'    '(noch nicht vorhanden)' '(not present yet)' '(尚不存在)' '(пока отсутствует)'
-X 'scan_total'    'Gesamt: {0} Pfade geprüft' 'Total: {0} paths checked' '共检查 {0} 个路径' 'Всего проверено путей: {0}'
-X 'scan_readonly' 'Sicher: Das Tool liest nur – Originaldaten werden nicht verändert.' 'Safe: the tool only reads – original data is not modified.' '安全：本工具只读取，不会修改原始数据。' 'Безопасно: программа только читает — исходные данные не меняются.'
+acct_line=Account {0}  ({1} conversations)
+act_backup=Create backup
+act_backup_d=Save RF4 data (chats, settings, screenshots) to a folder.
+act_merge=Merge installations
+act_merge_d=Add messages from other installations – nothing is overwritten.
+act_restore=Restore backup
+act_restore_d=Import saved data into an RF4 installation. Messages are merged.
+act_sync=Cloud / NAS sync
+act_sync_d=Sync mailboxes between PC, laptop and NAS (Nextcloud, Syncthing, network drive, USB).
+all_accts=All accounts ({0})
+app_title=RF4 Backup & Migration
+back=Back
+backup_dir=Backup folder
+backup_dir_p=Backup folder [{0}] (Enter = default)
+backup_done=Backup finished: {0}
+bk_mailbox={0}: {1} conversations
+bk_shots=Screenshots: {0} files
+btn_browse=Browse…
+btn_close=Close
+btn_home=Back to start
+btn_open=Open folder
+cancelled=Cancelled.
+choose=Choice
+contents=Contents:
+continue=[Enter] to continue
+donate=Donate: paypal.me/bjoernoppermann
+enter_path=Enter path
+exit=Exit
+f_copied={0} copied
+f_failed={0} failed: {1}
+f_identical={0} identical, nothing to do
+f_missing={0} not found
+f_overwritten={0} overwritten
+f_skipped={0} skipped
+folder_missing=Folder not found: {0}
+found_n=Found: {0} installation(s)
+from=From: {0}
+hash_click=(click to copy)
+hash_copied=SHA256 checksum copied:
+hash_label=SHA256: {0}…
+hash_unknown=SHA256: (path unknown)
+hdr_backup=BACKUP
+hdr_merge=MERGE INSTALLATIONS
+hdr_restore=RESTORE / IMPORT
+hdr_scan=SCAN INSTALLATIONS
+hdr_sync=CLOUD / NAS SYNC
+importing_to=Importing to: {0}
+invalid=Invalid input
+item_Crafting.dat=Crafting.dat
+item_mail=Mailboxes (private messages)
+item_Preferences.dat=Preferences.dat
+item_Settings.dat=Settings.dat (graphics/audio/keys)
+item_shots=Screenshots
+lang_changed=Language changed.
+lang_prompt=Choose language
+language=Language
+manual_path=→ Enter path manually
+mb_header=Mailbox {0}…
+mb_merge_fail=Merge failed: {0} – {1}
+mb_merge_file=Merge {0}: +{1} messages
+mb_summary=Mailbox: {0} merged, {1} newly copied, {2} unchanged
+menu_backup=Backup – Save data to a folder
+menu_lang=Change language
+menu_merge=Merge – Combine installations
+menu_restore=Restore – Import from a backup
+menu_scan=Scan – Show all installations
+menu_sync=Sync – Synchronize with cloud/NAS
+merge_done=Merge finished.
+merge_dst=Target (main installation, is kept)
+merge_need2=At least 2 existing installations are required.
+merge_nosrc=No other installations available as sources.
+merge_note=RF4 only allows switching Steam → Standalone, not the other way round. Details: https://nga.li/rf4transfer
+merge_safe=Only missing messages are added. Existing data is not overwritten.
+merge_same=Source and target must not be the same.
+merge_src=Sources (multiple allowed)
+merge_src_ctrl=Sources (Ctrl+click = multi-select)
+merge_src_hdr=Source: {0}
+need_python=python3 is required to merge messages (Debian/Ubuntu: sudo apt install python3).
+next=Next
+no_backup_here=No RF4 backup found in this folder.
+no_inst=No installations found.
+no_mailboxes=No mailboxes found.
+no_path=No path given.
+none_found=No installations found.
+nothing_sel=Nothing selected.
+pick_action=Please select an action.
+pick_backup=Choose backup folder
+pick_backup_d=Choose the folder that contains your RF4 backup.
+pick_dst=Please select a target installation.
+pick_item=Please select at least one option.
+pick_one_src=Please select at least one source.
+pick_source=Choose source – back up which installation?
+pick_src=Please select a source.
+pick_target=Target installation
+restore_done=Import finished.
+result_title=Done
+run_backup=Start backup
+run_merge=Start merge
+run_restore=Start restore
+running_ask=Continue anyway?
+running_warn=RF4 seems to be running ({0}). Please close the game BEFORE restore/merge/sync, otherwise changes get overwritten.
+scan_accounts=Account IDs: {0}
+scan_empty=(not present yet)
+scan_path=Path: {0}
+scan_readonly=Safe: the tool only reads – original data is not modified.
+scan_stats=Mailboxes: {0}  Conversations: {1}
+scan_total=Total: {0} paths checked
+scanning=Searching all drives…
+shots_done=Screenshots: {0} images → {1}
+shots_none=Screenshot folder not found
+step1=Scan
+step2=Action
+step3=Selection
+step4=Run
+step5=Result
+sync_cfg=Configure sync folder
+sync_dir_lbl=Sync folder:
+sync_done=Sync finished!
+sync_down={0} ← sync (downloaded)
+sync_down_new={0} ← sync (sync is newer)
+sync_enter=Enter sync folder (e.g. N:\RF4-Sync, D:\RF4-Sync):
+sync_first=Please configure the sync folder first.
+sync_hint=Nextcloud folder · NAS network drive (N:\) · Syncthing folder · USB stick
+sync_inst_lbl=Installation:
+sync_intro=Folder-based sync – Nextcloud, NAS drive, Syncthing, USB, OneDrive.
+sync_local=Local:  {0}
+sync_mkfail=Folder could not be created: {0}
+sync_nolocal=No local mailboxes – download only.
+sync_none=No sync folder configured.
+sync_noremote=The sync folder has no mailboxes from other devices yet.
+sync_ok=Sync folder: {0}
+sync_p1=Phase 1: local → sync (upload new messages)
+sync_p2=Phase 2: sync → local (download new messages)
+sync_p3=Settings (newer version wins)
+sync_pick_dir=Choose sync folder (e.g. Nextcloud folder or NAS drive)
+sync_remote=Sync:   {0}
+sync_run=Run sync now (bidirectional)
+sync_same={0}: identical, skipped
+sync_saved=Saved: {0}
+sync_st_boxes={0}: {1} conversations
+sync_st_log=Recent sync entries:
+sync_st_nodir=No RF4_Sync subfolder yet. Please run a sync first.
+sync_st_none=No mailboxes in the sync folder yet.
+sync_status=Show sync status
+sync_unreach=Sync folder not reachable: {0}
+sync_unreach_h=NAS mounted? Cloud sync running? USB plugged in?
+sync_up={0} → sync (uploaded)
+sync_up_new={0} → sync (local is newer)
+sync_which=Which installation to sync?
+to=To: {0}
+toggle_hint=(number = toggle, a = all, n = none, Enter = OK, 0 = back)
+undo_saved=Replaced files saved in: {0}
+usage=Usage: rf4sa-backup.sh [-l de|en|zh|ru]
+v_DE=RF4 Standalone German
+v_DE_new=RF4 Standalone German (new)
+v_EN=RF4 Standalone English
+v_Other=RF4 ({0})
+v_Steam=RF4 Steam
+w_drive=Drive: {0} / {1}
+w_extra=Path: {0}
+w_proton=Proton: AppID {0}
+w_user=User: {0}
+w_win=Windows: {0} / {1}
+w_wine=Wine: {0}
+what_backup=What should be backed up?
+what_restore=What should be imported?
+what_todo=What would you like to do?
+which_acct_b=Which account to back up?
+which_acct_m=Which accounts to merge from this source?
+which_acct_r=Which account to import?
+working=Please wait…
+yes_char=y
+yn_overwrite={0} already exists. Overwrite? [y/N]
 
-# Varianten / Orte
-X 'v_DE'      'RF4 Standalone Deutsch' 'RF4 Standalone German' 'RF4 独立版（德语）' 'RF4 Standalone (немецкая)'
-X 'v_DE_new'  'RF4 Standalone Deutsch (neu)' 'RF4 Standalone German (new)' 'RF4 独立版（德语，新）' 'RF4 Standalone (немецкая, новая)'
-X 'v_EN'      'RF4 Standalone Englisch' 'RF4 Standalone English' 'RF4 独立版（英语）' 'RF4 Standalone (английская)'
-X 'v_Steam'   'RF4 Steam' 'RF4 Steam' 'RF4 Steam 版' 'RF4 Steam'
-X 'v_Other'   'RF4 ({0})' 'RF4 ({0})' 'RF4 ({0})' 'RF4 ({0})'
-X 'w_user'    'Benutzer: {0}' 'User: {0}' '用户: {0}' 'Пользователь: {0}'
-X 'w_drive'   'Laufwerk: {0} / {1}' 'Drive: {0} / {1}' '驱动器: {0} / {1}' 'Диск: {0} / {1}'
-X 'w_extra'   'Pfad: {0}' 'Path: {0}' '路径: {0}' 'Путь: {0}'
-X 'w_win'     'Windows: {0} / {1}' 'Windows: {0} / {1}' 'Windows: {0} / {1}' 'Windows: {0} / {1}'
-X 'w_wine'    'Wine: {0}' 'Wine: {0}' 'Wine: {0}' 'Wine: {0}'
-X 'w_proton'  'Proton: AppID {0}' 'Proton: AppID {0}' 'Proton: AppID {0}' 'Proton: AppID {0}'
-X 'need_python' 'python3 wird für das Zusammenführen der Nachrichten benötigt (Debian/Ubuntu: sudo apt install python3).' 'python3 is required to merge messages (Debian/Ubuntu: sudo apt install python3).' '合并消息需要 python3（Debian/Ubuntu: sudo apt install python3）。' 'Для объединения сообщений нужен python3 (Debian/Ubuntu: sudo apt install python3).'
-X 'usage'      'Aufruf: rf4sa-backup.sh [-l de|en|zh|ru]' 'Usage: rf4sa-backup.sh [-l de|en|zh|ru]' '用法: rf4sa-backup.sh [-l de|en|zh|ru]' 'Использование: rf4sa-backup.sh [-l de|en|zh|ru]'
+# --- GUI / Backups / Ergebnis ---
+overwrite_q={0} already exists.{1}Overwrite?
+sel_account=Account:
+scan_hint=The tool automatically searches all drives for RF4 installations.
+rescan=Rescan
+target_none=No suitable target installation available.
+backup_to=Backup target folder
+preview=Backup contents:
+undo_hint=Files that get replaced are copied to _rf4tool_undo first.
+theme_label=Theme
+theme_auto=Automatic (like Windows)
+tip_lang=Change language
+tip_theme=Change theme
+bk_mailbox_n={0} mailboxes · {1} conversations
+bk_files_n=settings files: {0}
+bk_shots_n=screenshots: {0}
+existing_backups=Existing backups
+no_existing_backups=No backups found yet – choose a folder.
+other_folder=Choose another folder…
+last_change=Last changed: {0}
+chip_found=found
+chip_missing=not present
+convs_short=conversations
+sum_msgs=messages added
+sum_convs=conversations
+sum_files=files copied
+sum_shots=screenshots
+sum_skipped=skipped
+sum_failed=errors
+show_details=Show details
+hide_details=Hide details
+res_ok=Done – no errors.
+res_err=Finished, but with {0} error(s). See details.
+working_title=Please do not close – this may take a moment.
+btn_done=Done
+btn_start_over=New action
+hdr_scan_t=Installations
+hdr_action_t=What would you like to do?
+hdr_backup_t=Create backup
+hdr_restore_t=Restore backup
+hdr_merge_t=Merge installations
+hdr_sync_t=Cloud / NAS sync
+to_target=Target
+no_backup_found_cli=No backups in the usual folders – enter a path.
+pick_backup_list=Choose a backup
+theme_name_dark=Dark (navy)
+theme_name_light=Light
+open_folder_tip=Opens the folder in Explorer
+accounts_all=All accounts
+tip_card_select=Click to select
+select_backup_first=Please choose a backup first.
+sync_run_btn=Start sync
+sync_status_btn=Show status
+dialog_yes=Yes
+dialog_no=No
+dialog_ok=OK
+@@FILE lang/ru.lang
+# RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
+# Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
+@code=ru
+@name=Русский
 
-# Backup
-X 'hdr_backup'    'BACKUP' 'BACKUP' '备份' 'РЕЗЕРВНАЯ КОПИЯ'
-X 'pick_source'   'Quelle wählen – von welcher Installation sichern?' 'Choose source – back up which installation?' '选择来源——备份哪个安装？' 'Выберите источник — какую установку копировать?'
-X 'what_backup'   'Was soll gesichert werden?' 'What should be backed up?' '要备份什么？' 'Что копировать?'
-X 'what_restore'  'Was soll importiert werden?' 'What should be imported?' '要导入什么？' 'Что импортировать?'
-X 'item_mail'     'Mailboxen (private Nachrichten)' 'Mailboxes (private messages)' '邮箱（私人消息）' 'Почтовые ящики (личные сообщения)'
-X 'item_Settings.dat'    'Settings.dat (Grafik/Audio/Tasten)' 'Settings.dat (graphics/audio/keys)' 'Settings.dat（画面/音频/按键）' 'Settings.dat (графика/звук/клавиши)'
-X 'item_Preferences.dat' 'Preferences.dat' 'Preferences.dat' 'Preferences.dat' 'Preferences.dat'
-X 'item_Crafting.dat'    'Crafting.dat' 'Crafting.dat' 'Crafting.dat' 'Crafting.dat'
-X 'item_shots'    'Screenshots' 'Screenshots' '截图' 'Скриншоты'
-X 'nothing_sel'   'Nichts ausgewählt.' 'Nothing selected.' '未选择任何内容。' 'Ничего не выбрано.'
-X 'backup_dir'    'Backup-Ordner' 'Backup folder' '备份文件夹' 'Папка резервной копии'
-X 'backup_dir_p'  'Backup-Ordner [{0}] (Enter = Standard)' 'Backup folder [{0}] (Enter = default)' '备份文件夹 [{0}]（Enter = 默认）' 'Папка копии [{0}] (Enter = по умолчанию)'
-X 'from'          'Von: {0}' 'From: {0}' '来源: {0}' 'Откуда: {0}'
-X 'to'            'Nach: {0}' 'To: {0}' '目标: {0}' 'Куда: {0}'
-X 'backup_done'   'Backup fertig: {0}' 'Backup finished: {0}' '备份完成: {0}' 'Резервная копия готова: {0}'
-X 'run_backup'    'Backup starten' 'Start backup' '开始备份' 'Начать копирование'
-X 'no_inst'       'Keine Installationen gefunden.' 'No installations found.' '未找到安装。' 'Установки не найдены.'
-X 'which_acct_b'  'Welchen Account sichern?' 'Which account to back up?' '备份哪个账号？' 'Какой аккаунт копировать?'
-X 'which_acct_r'  'Welchen Account importieren?' 'Which account to import?' '导入哪个账号？' 'Какой аккаунт импортировать?'
-X 'which_acct_m'  'Welche Accounts aus dieser Quelle mergen?' 'Which accounts to merge from this source?' '从该来源合并哪些账号？' 'Какие аккаунты объединить из этого источника?'
-X 'all_accts'     'Alle Accounts ({0})' 'All accounts ({0})' '所有账号 ({0})' 'Все аккаунты ({0})'
-X 'acct_line'     'Account {0}  ({1} Konversationen)' 'Account {0}  ({1} conversations)' '账号 {0}  ({1} 个对话)' 'Аккаунт {0}  (диалогов: {1})'
+acct_line=Аккаунт {0}  (диалогов: {1})
+act_backup=Создать резервную копию
+act_backup_d=Сохранить данные RF4 (чаты, настройки, скриншоты) в папку.
+act_merge=Объединить установки
+act_merge_d=Добавить сообщения из других установок — ничего не перезаписывается.
+act_restore=Восстановить из копии
+act_restore_d=Импортировать сохранённые данные в установку RF4. Сообщения объединяются.
+act_sync=Синхронизация облако / NAS
+act_sync_d=Синхронизация почты между ПК, ноутбуком и NAS (Nextcloud, Syncthing, сетевой диск, USB).
+all_accts=Все аккаунты ({0})
+app_title=RF4 Резервное копирование и перенос
+back=Назад
+backup_dir=Папка резервной копии
+backup_dir_p=Папка копии [{0}] (Enter = по умолчанию)
+backup_done=Резервная копия готова: {0}
+bk_mailbox={0}: диалогов {1}
+bk_shots=Скриншоты: файлов {0}
+btn_browse=Обзор…
+btn_close=Закрыть
+btn_home=В начало
+btn_open=Открыть папку
+cancelled=Отменено.
+choose=Выбор
+contents=Содержимое:
+continue=[Enter] — продолжить
+donate=Поддержать: paypal.me/bjoernoppermann
+enter_path=Введите путь
+exit=Выход
+f_copied={0} скопирован
+f_failed={0}: ошибка: {1}
+f_identical={0} идентичен, ничего не делаем
+f_missing={0} не найден
+f_overwritten={0} перезаписан
+f_skipped={0} пропущен
+folder_missing=Папка не найдена: {0}
+found_n=Найдено установок: {0}
+from=Откуда: {0}
+hash_click=(нажмите, чтобы скопировать)
+hash_copied=Контрольная сумма SHA256 скопирована:
+hash_label=SHA256: {0}…
+hash_unknown=SHA256: (путь неизвестен)
+hdr_backup=РЕЗЕРВНАЯ КОПИЯ
+hdr_merge=ОБЪЕДИНЕНИЕ УСТАНОВОК
+hdr_restore=ВОССТАНОВЛЕНИЕ / ИМПОРТ
+hdr_scan=ПОИСК УСТАНОВОК
+hdr_sync=СИНХРОНИЗАЦИЯ ОБЛАКО / NAS
+importing_to=Импорт в: {0}
+invalid=Неверный ввод
+item_Crafting.dat=Crafting.dat
+item_mail=Почтовые ящики (личные сообщения)
+item_Preferences.dat=Preferences.dat
+item_Settings.dat=Settings.dat (графика/звук/клавиши)
+item_shots=Скриншоты
+lang_changed=Язык изменён.
+lang_prompt=Выберите язык
+language=Язык
+manual_path=→ Ввести путь вручную
+mb_header=Ящик {0}…
+mb_merge_fail=Ошибка слияния: {0} – {1}
+mb_merge_file=Слияние {0}: +{1} сообщ.
+mb_summary=Ящик: слито {0}, скопировано новых {1}, без изменений {2}
+menu_backup=Резервная копия – сохранить данные в папку
+menu_lang=Сменить язык
+menu_merge=Объединить – слить установки
+menu_restore=Восстановить – импорт из резервной копии
+menu_scan=Сканировать – показать все установки
+menu_sync=Синхронизация – облако/NAS
+merge_done=Объединение завершено.
+merge_dst=Цель (основная установка, сохраняется)
+merge_need2=Нужно минимум 2 существующие установки.
+merge_nosrc=Нет других установок в качестве источников.
+merge_note=RF4 позволяет переходить только Steam → Standalone, но не наоборот. Подробнее: https://nga.li/rf4transfer
+merge_safe=Добавляются только недостающие сообщения. Существующие данные не перезаписываются.
+merge_same=Источник и цель не должны совпадать.
+merge_src=Источники (можно несколько)
+merge_src_ctrl=Источники (Ctrl+клик = несколько)
+merge_src_hdr=Источник: {0}
+need_python=Для объединения сообщений нужен python3 (Debian/Ubuntu: sudo apt install python3).
+next=Далее
+no_backup_here=В этой папке нет резервной копии RF4.
+no_inst=Установки не найдены.
+no_mailboxes=Почтовые ящики не найдены.
+no_path=Путь не указан.
+none_found=Установки не найдены.
+nothing_sel=Ничего не выбрано.
+pick_action=Выберите действие.
+pick_backup=Выберите папку резервной копии
+pick_backup_d=Выберите папку с вашей резервной копией RF4.
+pick_dst=Выберите целевую установку.
+pick_item=Выберите хотя бы один пункт.
+pick_one_src=Выберите хотя бы один источник.
+pick_source=Выберите источник — какую установку копировать?
+pick_src=Выберите источник.
+pick_target=Целевая установка
+restore_done=Импорт завершён.
+result_title=Готово
+run_backup=Начать копирование
+run_merge=Начать объединение
+run_restore=Начать восстановление
+running_ask=Всё равно продолжить?
+running_warn=RF4, похоже, запущена ({0}). Закройте игру ПЕРЕД восстановлением/объединением/синхронизацией, иначе изменения будут перезаписаны.
+scan_accounts=ID аккаунтов: {0}
+scan_empty=(пока отсутствует)
+scan_path=Путь: {0}
+scan_readonly=Безопасно: программа только читает — исходные данные не меняются.
+scan_stats=Ящиков: {0}  Диалогов: {1}
+scan_total=Всего проверено путей: {0}
+scanning=Поиск на всех дисках…
+shots_done=Скриншоты: {0} изобр. → {1}
+shots_none=Папка скриншотов не найдена
+step1=Поиск
+step2=Действие
+step3=Выбор
+step4=Запуск
+step5=Итог
+sync_cfg=Настроить папку синхронизации
+sync_dir_lbl=Папка синхронизации:
+sync_done=Синхронизация завершена!
+sync_down={0} ← синхр. (скачано)
+sync_down_new={0} ← синхр. (в синхр. новее)
+sync_enter=Введите папку синхронизации (напр. N:\RF4-Sync, D:\RF4-Sync):
+sync_first=Сначала настройте папку синхронизации.
+sync_hint=Папка Nextcloud · сетевой диск NAS (N:\) · папка Syncthing · USB-накопитель
+sync_inst_lbl=Установка:
+sync_intro=Синхронизация через папку — Nextcloud, NAS, Syncthing, USB, OneDrive.
+sync_local=Локально:  {0}
+sync_mkfail=Не удалось создать папку: {0}
+sync_nolocal=Локальных ящиков нет — только загрузка.
+sync_none=Папка синхронизации не настроена.
+sync_noremote=В папке синхронизации ещё нет ящиков с других устройств.
+sync_ok=Папка синхронизации: {0}
+sync_p1=Этап 1: локально → синхр. (загрузка новых сообщений)
+sync_p2=Этап 2: синхр. → локально (скачивание новых сообщений)
+sync_p3=Настройки (побеждает более новая версия)
+sync_pick_dir=Выберите папку синхронизации (напр. Nextcloud или диск NAS)
+sync_remote=Синхр.:   {0}
+sync_run=Синхронизировать сейчас (двусторонне)
+sync_same={0}: одинаковы, пропущено
+sync_saved=Сохранено: {0}
+sync_st_boxes={0}: диалогов {1}
+sync_st_log=Последние записи синхронизации:
+sync_st_nodir=Подпапки RF4_Sync ещё нет. Сначала выполните синхронизацию.
+sync_st_none=В папке синхронизации ещё нет ящиков.
+sync_status=Показать состояние синхронизации
+sync_unreach=Папка синхронизации недоступна: {0}
+sync_unreach_h=NAS подключён? Облачная синхронизация активна? USB вставлен?
+sync_up={0} → синхр. (загружено)
+sync_up_new={0} → синхр. (локальный новее)
+sync_which=Какую установку синхронизировать?
+to=Куда: {0}
+toggle_hint=(номер = вкл/выкл, a = все, n = ничего, Enter = ОК, 0 = назад)
+undo_saved=Заменённые файлы сохранены в: {0}
+usage=Использование: rf4sa-backup.sh [-l de|en|zh|ru]
+v_DE=RF4 Standalone (немецкая)
+v_DE_new=RF4 Standalone (немецкая, новая)
+v_EN=RF4 Standalone (английская)
+v_Other=RF4 ({0})
+v_Steam=RF4 Steam
+w_drive=Диск: {0} / {1}
+w_extra=Путь: {0}
+w_proton=Proton: AppID {0}
+w_user=Пользователь: {0}
+w_win=Windows: {0} / {1}
+w_wine=Wine: {0}
+what_backup=Что копировать?
+what_restore=Что импортировать?
+what_todo=Что вы хотите сделать?
+which_acct_b=Какой аккаунт копировать?
+which_acct_m=Какие аккаунты объединить из этого источника?
+which_acct_r=Какой аккаунт импортировать?
+working=Пожалуйста, подождите…
+yes_char=д
+yn_overwrite={0} уже существует. Перезаписать? [д/Н]
 
-# Restore
-X 'hdr_restore'   'RESTORE / IMPORT' 'RESTORE / IMPORT' '恢复 / 导入' 'ВОССТАНОВЛЕНИЕ / ИМПОРТ'
-X 'pick_backup'   'Backup-Ordner wählen' 'Choose backup folder' '选择备份文件夹' 'Выберите папку резервной копии'
-X 'pick_backup_d' 'Wähle den Ordner, der dein RF4-Backup enthält.' 'Choose the folder that contains your RF4 backup.' '请选择包含 RF4 备份的文件夹。' 'Выберите папку с вашей резервной копией RF4.'
-X 'folder_missing' 'Ordner nicht gefunden: {0}' 'Folder not found: {0}' '未找到文件夹: {0}' 'Папка не найдена: {0}'
-X 'no_backup_here' 'Kein RF4-Backup in diesem Ordner gefunden.' 'No RF4 backup found in this folder.' '该文件夹中没有 RF4 备份。' 'В этой папке нет резервной копии RF4.'
-X 'contents'       'Inhalt:' 'Contents:' '内容:' 'Содержимое:'
-X 'bk_mailbox'    '{0}: {1} Konversationen' '{0}: {1} conversations' '{0}: {1} 个对话' '{0}: диалогов {1}'
-X 'bk_shots'      'Screenshots: {0} Dateien' 'Screenshots: {0} files' '截图: {0} 个文件' 'Скриншоты: файлов {0}'
-X 'pick_target'   'Ziel-Installation' 'Target installation' '目标安装' 'Целевая установка'
-X 'manual_path'   '→ Pfad manuell eingeben' '→ Enter path manually' '→ 手动输入路径' '→ Ввести путь вручную'
-X 'enter_path'    'Pfad eingeben' 'Enter path' '输入路径' 'Введите путь'
-X 'no_path'       'Kein Pfad angegeben.' 'No path given.' '未提供路径。' 'Путь не указан.'
-X 'importing_to'  'Importiere nach: {0}' 'Importing to: {0}' '正在导入到: {0}' 'Импорт в: {0}'
-X 'restore_done'  'Import abgeschlossen.' 'Import finished.' '导入完成。' 'Импорт завершён.'
-X 'run_restore'   'Restore starten' 'Start restore' '开始恢复' 'Начать восстановление'
+# --- GUI / Backups / Ergebnis ---
+overwrite_q={0} уже существует.{1}Перезаписать?
+sel_account=Аккаунт:
+scan_hint=Программа автоматически ищет установки RF4 на всех дисках.
+rescan=Искать заново
+target_none=Подходящая целевая установка отсутствует.
+backup_to=Папка для копии
+preview=Содержимое копии:
+undo_hint=Заменяемые файлы сначала копируются в _rf4tool_undo.
+theme_label=Тема
+theme_auto=Автоматически (как в Windows)
+tip_lang=Сменить язык
+tip_theme=Сменить тему
+bk_mailbox_n=Ящиков: {0} · диалогов: {1}
+bk_files_n=файлов настроек: {0}
+bk_shots_n=скриншотов: {0}
+existing_backups=Найденные резервные копии
+no_existing_backups=Резервные копии не найдены — выберите папку.
+other_folder=Выбрать другую папку…
+last_change=Изменено: {0}
+chip_found=найдено
+chip_missing=нет
+convs_short=диалогов
+sum_msgs=сообщений добавлено
+sum_convs=диалогов
+sum_files=файлов скопировано
+sum_shots=скриншотов
+sum_skipped=пропущено
+sum_failed=ошибок
+show_details=Показать подробности
+hide_details=Скрыть подробности
+res_ok=Готово — без ошибок.
+res_err=Завершено, но с ошибками: {0}. Смотрите подробности.
+working_title=Не закрывайте — это может занять некоторое время.
+btn_done=Готово
+btn_start_over=Новое действие
+hdr_scan_t=Установки
+hdr_action_t=Что вы хотите сделать?
+hdr_backup_t=Создать резервную копию
+hdr_restore_t=Восстановить из копии
+hdr_merge_t=Объединить установки
+hdr_sync_t=Синхронизация облако / NAS
+to_target=Цель
+no_backup_found_cli=В обычных папках копий нет — введите путь.
+pick_backup_list=Выберите резервную копию
+theme_name_dark=Тёмная (морская)
+theme_name_light=Светлая
+open_folder_tip=Открывает папку в проводнике
+accounts_all=Все аккаунты
+tip_card_select=Нажмите, чтобы выбрать
+select_backup_first=Сначала выберите резервную копию.
+sync_run_btn=Начать синхронизацию
+sync_status_btn=Показать состояние
+dialog_yes=Да
+dialog_no=Нет
+dialog_ok=ОК
+@@FILE lang/zh.lang
+# RF4 Backup Tool - Sprachdatei / language file / 语言文件 / файл языка
+# Format: key=Text   ({0} {1} ... = Platzhalter). Fehlende Schlüssel fallen auf Englisch zurück.
+@code=zh
+@name=中文
 
-# Merge
-X 'hdr_merge'     'INSTALLATIONEN MERGEN' 'MERGE INSTALLATIONS' '合并安装' 'ОБЪЕДИНЕНИЕ УСТАНОВОК'
-X 'merge_need2'   'Mindestens 2 vorhandene Installationen nötig.' 'At least 2 existing installations are required.' '至少需要 2 个现有安装。' 'Нужно минимум 2 существующие установки.'
-X 'merge_note'    'RF4 erlaubt nur den Wechsel Steam → Standalone, nicht umgekehrt. Details: https://nga.li/rf4transfer' 'RF4 only allows switching Steam → Standalone, not the other way round. Details: https://nga.li/rf4transfer' 'RF4 只允许从 Steam 切换到独立版，反之不行。详情: https://nga.li/rf4transfer' 'RF4 позволяет переходить только Steam → Standalone, но не наоборот. Подробнее: https://nga.li/rf4transfer'
-X 'merge_safe'    'Nur fehlende Nachrichten werden ergänzt. Vorhandene Daten werden nicht überschrieben.' 'Only missing messages are added. Existing data is not overwritten.' '仅补充缺失的消息，不会覆盖现有数据。' 'Добавляются только недостающие сообщения. Существующие данные не перезаписываются.'
-X 'merge_dst'      'Ziel (Hauptinstallation, bleibt erhalten)' 'Target (main installation, is kept)' '目标（主安装，将保留）' 'Цель (основная установка, сохраняется)'
-X 'merge_src'     'Quellen (mehrere möglich)' 'Sources (multiple allowed)' '来源（可多选）' 'Источники (можно несколько)'
-X 'merge_src_ctrl' 'Quellen (Strg+Klick = Mehrfachauswahl)' 'Sources (Ctrl+click = multi-select)' '来源（Ctrl+点击 = 多选）' 'Источники (Ctrl+клик = несколько)'
-X 'merge_nosrc'    'Keine weiteren Installationen als Quellen verfügbar.' 'No other installations available as sources.' '没有其他可用作来源的安装。' 'Нет других установок в качестве источников.'
-X 'merge_src_hdr' 'Quelle: {0}' 'Source: {0}' '来源: {0}' 'Источник: {0}'
-X 'merge_same'    'Quelle und Ziel dürfen nicht identisch sein.' 'Source and target must not be the same.' '来源和目标不能相同。' 'Источник и цель не должны совпадать.'
-X 'merge_done'    'Merge abgeschlossen.' 'Merge finished.' '合并完成。' 'Объединение завершено.'
-X 'run_merge'     'Merge starten' 'Start merge' '开始合并' 'Начать объединение'
-X 'pick_one_src'  'Bitte mindestens eine Quelle wählen.' 'Please select at least one source.' '请至少选择一个来源。' 'Выберите хотя бы один источник.'
-X 'pick_dst'      'Bitte Ziel-Installation wählen.' 'Please select a target installation.' '请选择目标安装。' 'Выберите целевую установку.'
-X 'pick_src'      'Bitte eine Quelle wählen.' 'Please select a source.' '请选择来源。' 'Выберите источник.'
-X 'pick_item'     'Bitte mindestens eine Option wählen.' 'Please select at least one option.' '请至少选择一项。' 'Выберите хотя бы один пункт.'
-X 'pick_action'   'Bitte eine Aktion wählen.' 'Please select an action.' '请选择一个操作。' 'Выберите действие.'
-X 'what_todo'     'Was möchtest du tun?' 'What would you like to do?' '您想做什么？' 'Что вы хотите сделать?'
+acct_line=账号 {0}  ({1} 个对话)
+act_backup=创建备份
+act_backup_d=将 RF4 数据（聊天、设置、截图）保存到文件夹。
+act_merge=合并安装
+act_merge_d=从其他安装补充消息——不会覆盖任何内容。
+act_restore=恢复备份
+act_restore_d=将已保存的数据导入 RF4 安装。消息会被合并。
+act_sync=云 / NAS 同步
+act_sync_d=在电脑、笔记本和 NAS 之间同步邮箱（Nextcloud、Syncthing、网络驱动器、USB）。
+all_accts=所有账号 ({0})
+app_title=RF4 备份与迁移
+back=返回
+backup_dir=备份文件夹
+backup_dir_p=备份文件夹 [{0}]（Enter = 默认）
+backup_done=备份完成: {0}
+bk_mailbox={0}: {1} 个对话
+bk_shots=截图: {0} 个文件
+btn_browse=浏览…
+btn_close=关闭
+btn_home=返回开始
+btn_open=打开文件夹
+cancelled=已取消。
+choose=选择
+contents=内容:
+continue=按 [Enter] 继续
+donate=捐赠: paypal.me/bjoernoppermann
+enter_path=输入路径
+exit=退出
+f_copied={0} 已复制
+f_failed={0} 失败: {1}
+f_identical={0} 相同，无需处理
+f_missing=未找到 {0}
+f_overwritten={0} 已覆盖
+f_skipped={0} 已跳过
+folder_missing=未找到文件夹: {0}
+found_n=已找到：{0} 个安装
+from=来源: {0}
+hash_click=（点击复制）
+hash_copied=SHA256 校验和已复制:
+hash_label=SHA256: {0}…
+hash_unknown=SHA256: （路径未知）
+hdr_backup=备份
+hdr_merge=合并安装
+hdr_restore=恢复 / 导入
+hdr_scan=扫描安装
+hdr_sync=云 / NAS 同步
+importing_to=正在导入到: {0}
+invalid=输入无效
+item_Crafting.dat=Crafting.dat
+item_mail=邮箱（私人消息）
+item_Preferences.dat=Preferences.dat
+item_Settings.dat=Settings.dat（画面/音频/按键）
+item_shots=截图
+lang_changed=语言已更改。
+lang_prompt=选择语言
+language=语言
+manual_path=→ 手动输入路径
+mb_header=邮箱 {0}…
+mb_merge_fail=合并失败: {0} – {1}
+mb_merge_file=合并 {0}: +{1} 条消息
+mb_summary=邮箱: {0} 个已合并, {1} 个新复制, {2} 个未变化
+menu_backup=备份 – 将数据保存到文件夹
+menu_lang=切换语言
+menu_merge=合并 – 合并多个安装
+menu_restore=恢复 – 从备份导入
+menu_scan=扫描 – 显示所有安装
+menu_sync=同步 – 与云/NAS同步
+merge_done=合并完成。
+merge_dst=目标（主安装，将保留）
+merge_need2=至少需要 2 个现有安装。
+merge_nosrc=没有其他可用作来源的安装。
+merge_note=RF4 只允许从 Steam 切换到独立版，反之不行。详情: https://nga.li/rf4transfer
+merge_safe=仅补充缺失的消息，不会覆盖现有数据。
+merge_same=来源和目标不能相同。
+merge_src=来源（可多选）
+merge_src_ctrl=来源（Ctrl+点击 = 多选）
+merge_src_hdr=来源: {0}
+need_python=合并消息需要 python3（Debian/Ubuntu: sudo apt install python3）。
+next=下一步
+no_backup_here=该文件夹中没有 RF4 备份。
+no_inst=未找到安装。
+no_mailboxes=未找到邮箱。
+no_path=未提供路径。
+none_found=未找到安装。
+nothing_sel=未选择任何内容。
+pick_action=请选择一个操作。
+pick_backup=选择备份文件夹
+pick_backup_d=请选择包含 RF4 备份的文件夹。
+pick_dst=请选择目标安装。
+pick_item=请至少选择一项。
+pick_one_src=请至少选择一个来源。
+pick_source=选择来源——备份哪个安装？
+pick_src=请选择来源。
+pick_target=目标安装
+restore_done=导入完成。
+result_title=完成
+run_backup=开始备份
+run_merge=开始合并
+run_restore=开始恢复
+running_ask=仍要继续吗？
+running_warn=检测到 RF4 正在运行 ({0})。请在恢复/合并/同步之前关闭游戏，否则更改会被覆盖。
+scan_accounts=账号 ID: {0}
+scan_empty=(尚不存在)
+scan_path=路径: {0}
+scan_readonly=安全：本工具只读取，不会修改原始数据。
+scan_stats=邮箱: {0}  对话: {1}
+scan_total=共检查 {0} 个路径
+scanning=正在搜索所有驱动器…
+shots_done=截图: {0} 张 → {1}
+shots_none=未找到截图文件夹
+step1=扫描
+step2=操作
+step3=选择
+step4=执行
+step5=结果
+sync_cfg=配置同步文件夹
+sync_dir_lbl=同步文件夹:
+sync_done=同步完成！
+sync_down={0} ← 同步（已下载）
+sync_down_new={0} ← 同步（同步版较新）
+sync_enter=输入同步文件夹（例如 N:\RF4-Sync, D:\RF4-Sync）:
+sync_first=请先配置同步文件夹。
+sync_hint=Nextcloud 文件夹 · NAS 网络驱动器 (N:\) · Syncthing 文件夹 · U 盘
+sync_inst_lbl=安装:
+sync_intro=基于文件夹的同步——Nextcloud、NAS 驱动器、Syncthing、USB、OneDrive。
+sync_local=本地:  {0}
+sync_mkfail=无法创建文件夹: {0}
+sync_nolocal=没有本地邮箱——仅执行下载。
+sync_none=尚未配置同步文件夹。
+sync_noremote=同步文件夹中还没有来自其他设备的邮箱。
+sync_ok=同步文件夹: {0}
+sync_p1=阶段 1：本地 → 同步（上传新消息）
+sync_p2=阶段 2：同步 → 本地（下载新消息）
+sync_p3=设置（以较新版本为准）
+sync_pick_dir=选择同步文件夹（例如 Nextcloud 文件夹或 NAS 驱动器）
+sync_remote=同步:   {0}
+sync_run=立即同步（双向）
+sync_same={0}: 相同，已跳过
+sync_saved=已保存: {0}
+sync_st_boxes={0}: {1} 个对话
+sync_st_log=最近的同步记录:
+sync_st_nodir=还没有 RF4_Sync 子文件夹。请先执行一次同步。
+sync_st_none=同步文件夹中还没有邮箱。
+sync_status=显示同步状态
+sync_unreach=无法访问同步文件夹: {0}
+sync_unreach_h=NAS 已挂载？云同步已启动？U 盘已插入？
+sync_up={0} → 同步（已上传）
+sync_up_new={0} → 同步（本地较新）
+sync_which=同步哪个安装？
+to=目标: {0}
+toggle_hint=(数字 = 切换, a = 全选, n = 全不选, Enter = 确定, 0 = 返回)
+undo_saved=被替换的文件已保存到: {0}
+usage=用法: rf4sa-backup.sh [-l de|en|zh|ru]
+v_DE=RF4 独立版（德语）
+v_DE_new=RF4 独立版（德语，新）
+v_EN=RF4 独立版（英语）
+v_Other=RF4 ({0})
+v_Steam=RF4 Steam 版
+w_drive=驱动器: {0} / {1}
+w_extra=路径: {0}
+w_proton=Proton: AppID {0}
+w_user=用户: {0}
+w_win=Windows: {0} / {1}
+w_wine=Wine: {0}
+what_backup=要备份什么？
+what_restore=要导入什么？
+what_todo=您想做什么？
+which_acct_b=备份哪个账号？
+which_acct_m=从该来源合并哪些账号？
+which_acct_r=导入哪个账号？
+working=请稍候…
+yes_char=y
+yn_overwrite={0} 已存在。是否覆盖？[y/N]
 
-# Sync
-X 'hdr_sync'      'CLOUD / NAS SYNC' 'CLOUD / NAS SYNC' '云 / NAS 同步' 'СИНХРОНИЗАЦИЯ ОБЛАКО / NAS'
-X 'sync_intro'    'Ordnerbasierter Sync – Nextcloud, NAS-Laufwerk, Syncthing, USB, OneDrive.' 'Folder-based sync – Nextcloud, NAS drive, Syncthing, USB, OneDrive.' '基于文件夹的同步——Nextcloud、NAS 驱动器、Syncthing、USB、OneDrive。' 'Синхронизация через папку — Nextcloud, NAS, Syncthing, USB, OneDrive.'
-X 'sync_none'     'Kein Sync-Ordner konfiguriert.' 'No sync folder configured.' '尚未配置同步文件夹。' 'Папка синхронизации не настроена.'
-X 'sync_ok'       'Sync-Ordner: {0}' 'Sync folder: {0}' '同步文件夹: {0}' 'Папка синхронизации: {0}'
-X 'sync_unreach'  'Sync-Ordner nicht erreichbar: {0}' 'Sync folder not reachable: {0}' '无法访问同步文件夹: {0}' 'Папка синхронизации недоступна: {0}'
-X 'sync_unreach_h' 'NAS eingebunden? Cloud-Sync aktiv? USB angesteckt?' 'NAS mounted? Cloud sync running? USB plugged in?' 'NAS 已挂载？云同步已启动？U 盘已插入？' 'NAS подключён? Облачная синхронизация активна? USB вставлен?'
-X 'sync_run'      'Sync jetzt ausführen (bidirektional)' 'Run sync now (bidirectional)' '立即同步（双向）' 'Синхронизировать сейчас (двусторонне)'
-X 'sync_cfg'      'Sync-Ordner konfigurieren' 'Configure sync folder' '配置同步文件夹' 'Настроить папку синхронизации'
-X 'sync_status'   'Sync-Status anzeigen' 'Show sync status' '显示同步状态' 'Показать состояние синхронизации'
-X 'sync_enter'    'Sync-Ordner eingeben (z.B. N:\RF4-Sync, D:\RF4-Sync):' 'Enter sync folder (e.g. N:\RF4-Sync, D:\RF4-Sync):' '输入同步文件夹（例如 N:\RF4-Sync, D:\RF4-Sync）:' 'Введите папку синхронизации (напр. N:\RF4-Sync, D:\RF4-Sync):'
-X 'sync_saved'    'Gespeichert: {0}' 'Saved: {0}' '已保存: {0}' 'Сохранено: {0}'
-X 'sync_mkfail'   'Ordner konnte nicht erstellt werden: {0}' 'Folder could not be created: {0}' '无法创建文件夹: {0}' 'Не удалось создать папку: {0}'
-X 'sync_first'    'Bitte zuerst den Sync-Ordner konfigurieren.' 'Please configure the sync folder first.' '请先配置同步文件夹。' 'Сначала настройте папку синхронизации.'
-X 'sync_which'    'Welche Installation synchronisieren?' 'Which installation to sync?' '同步哪个安装？' 'Какую установку синхронизировать?'
-X 'sync_local'    'Lokal:  {0}' 'Local:  {0}' '本地:  {0}' 'Локально:  {0}'
-X 'sync_remote'   'Sync:   {0}' 'Sync:   {0}' '同步:   {0}' 'Синхр.:   {0}'
-X 'sync_p1'       'Phase 1: Lokal → Sync (neue Nachrichten hochladen)' 'Phase 1: local → sync (upload new messages)' '阶段 1：本地 → 同步（上传新消息）' 'Этап 1: локально → синхр. (загрузка новых сообщений)'
-X 'sync_p2'       'Phase 2: Sync → Lokal (neue Nachrichten herunterladen)' 'Phase 2: sync → local (download new messages)' '阶段 2：同步 → 本地（下载新消息）' 'Этап 2: синхр. → локально (скачивание новых сообщений)'
-X 'sync_p3'       'Einstellungen (neuere Version gewinnt)' 'Settings (newer version wins)' '设置（以较新版本为准）' 'Настройки (побеждает более новая версия)'
-X 'sync_nolocal'  'Keine lokalen Mailboxen – nur Download wird ausgeführt.' 'No local mailboxes – download only.' '没有本地邮箱——仅执行下载。' 'Локальных ящиков нет — только загрузка.'
-X 'sync_noremote' 'Der Sync-Ordner enthält noch keine Mailboxen anderer Geräte.' 'The sync folder has no mailboxes from other devices yet.' '同步文件夹中还没有来自其他设备的邮箱。' 'В папке синхронизации ещё нет ящиков с других устройств.'
-X 'sync_done'     'Sync abgeschlossen!' 'Sync finished!' '同步完成！' 'Синхронизация завершена!'
-X 'sync_up'       '{0} → Sync (hochgeladen)' '{0} → sync (uploaded)' '{0} → 同步（已上传）' '{0} → синхр. (загружено)'
-X 'sync_down'     '{0} ← Sync (heruntergeladen)' '{0} ← sync (downloaded)' '{0} ← 同步（已下载）' '{0} ← синхр. (скачано)'
-X 'sync_up_new'   '{0} → Sync (lokal neuer)' '{0} → sync (local is newer)' '{0} → 同步（本地较新）' '{0} → синхр. (локальный новее)'
-X 'sync_down_new' '{0} ← Sync (Sync neuer)' '{0} ← sync (sync is newer)' '{0} ← 同步（同步版较新）' '{0} ← синхр. (в синхр. новее)'
-X 'sync_same'     '{0}: identisch, übersprungen' '{0}: identical, skipped' '{0}: 相同，已跳过' '{0}: одинаковы, пропущено'
-X 'sync_st_boxes' '{0}: {1} Konversationen' '{0}: {1} conversations' '{0}: {1} 个对话' '{0}: диалогов {1}'
-X 'sync_st_none'  'Noch keine Mailboxen im Sync-Ordner.' 'No mailboxes in the sync folder yet.' '同步文件夹中还没有邮箱。' 'В папке синхронизации ещё нет ящиков.'
-X 'sync_st_nodir' 'Noch kein RF4_Sync-Unterordner. Bitte zuerst einen Sync ausführen.' 'No RF4_Sync subfolder yet. Please run a sync first.' '还没有 RF4_Sync 子文件夹。请先执行一次同步。' 'Подпапки RF4_Sync ещё нет. Сначала выполните синхронизацию.'
-X 'sync_st_log'   'Letzte Sync-Einträge:' 'Recent sync entries:' '最近的同步记录:' 'Последние записи синхронизации:'
-X 'sync_hint'     'Nextcloud-Ordner · NAS-Netzlaufwerk (N:\) · Syncthing-Ordner · USB-Stick' 'Nextcloud folder · NAS network drive (N:\) · Syncthing folder · USB stick' 'Nextcloud 文件夹 · NAS 网络驱动器 (N:\) · Syncthing 文件夹 · U 盘' 'Папка Nextcloud · сетевой диск NAS (N:\) · папка Syncthing · USB-накопитель'
-X 'sync_dir_lbl'  'Sync-Ordner:' 'Sync folder:' '同步文件夹:' 'Папка синхронизации:'
-X 'sync_inst_lbl' 'Installation:' 'Installation:' '安装:' 'Установка:'
-X 'sync_pick_dir' 'Sync-Ordner wählen (z.B. Nextcloud-Ordner oder NAS-Laufwerk)' 'Choose sync folder (e.g. Nextcloud folder or NAS drive)' '选择同步文件夹（例如 Nextcloud 文件夹或 NAS 驱动器）' 'Выберите папку синхронизации (напр. Nextcloud или диск NAS)'
+# --- GUI / Backups / Ergebnis ---
+overwrite_q={0} 已存在。{1}是否覆盖？
+sel_account=账号:
+scan_hint=本工具会自动在所有驱动器上搜索 RF4 安装。
+rescan=重新扫描
+target_none=没有合适的目标安装。
+backup_to=备份目标文件夹
+preview=备份内容:
+undo_hint=被替换的文件会先复制到 _rf4tool_undo。
+theme_label=外观
+theme_auto=自动（跟随 Windows）
+tip_lang=切换语言
+tip_theme=切换外观
+bk_mailbox_n={0} 个邮箱 · {1} 个对话
+bk_files_n=设置文件: {0}
+bk_shots_n=截图: {0}
+existing_backups=现有备份
+no_existing_backups=尚未找到备份——请选择一个文件夹。
+other_folder=选择其他文件夹…
+last_change=最后修改: {0}
+chip_found=已找到
+chip_missing=不存在
+convs_short=对话
+sum_msgs=条消息已补充
+sum_convs=个对话
+sum_files=个文件已复制
+sum_shots=张截图
+sum_skipped=已跳过
+sum_failed=个错误
+show_details=显示详情
+hide_details=隐藏详情
+res_ok=完成——没有错误。
+res_err=已完成，但有 {0} 个错误。请查看详情。
+working_title=请勿关闭——这可能需要一点时间。
+btn_done=完成
+btn_start_over=新操作
+hdr_scan_t=安装
+hdr_action_t=您想做什么？
+hdr_backup_t=创建备份
+hdr_restore_t=恢复备份
+hdr_merge_t=合并安装
+hdr_sync_t=云 / NAS 同步
+to_target=目标
+no_backup_found_cli=常用文件夹中没有备份——请输入路径。
+pick_backup_list=选择备份
+theme_name_dark=深色（海军蓝）
+theme_name_light=浅色
+open_folder_tip=在资源管理器中打开文件夹
+accounts_all=所有账号
+tip_card_select=点击选择
+select_backup_first=请先选择一个备份。
+sync_run_btn=开始同步
+sync_status_btn=显示状态
+dialog_yes=是
+dialog_no=否
+dialog_ok=确定
+@@FILE themes/dark.theme
+# RF4 Backup Tool - Theme. Eigene Themes: Datei in themes\ (neben dem Skript) oder %APPDATA%\rf4-backup\themes\ ablegen.
+# @base = dark|light  (welcher Windows-Modus dieses Theme bei 'Automatisch' ersetzt)
+@code=dark
+@name=Marine / Navy
+@base=dark
+bg=#0B1B2B
+surface=#12293F
+surface2=#1A3652
+border=#27445F
+text=#E8EEF4
+muted=#8FA6BC
+accent=#F2A93B
+accentHover=#FFBD5C
+accentText=#1B1204
+success=#3DD68C
+warn=#F2C94C
+danger=#FF6B6B
+selection=#1F4469
+@@FILE themes/light.theme
+# RF4 Backup Tool - Theme (hell)
+@code=light
+@name=Hell / Light
+@base=light
+bg=#F3F6FA
+surface=#FFFFFF
+surface2=#E9F0F7
+border=#D0DCE8
+text=#13253A
+muted=#5A7186
+accent=#C77700
+accentHover=#DB8A10
+accentText=#1B1204
+success=#1E9E62
+warn=#B7791F
+danger=#D64545
+selection=#DCEAF8
+'@
 
-# Operationen (Log)
-X 'mb_header'     'Mailbox {0}…' 'Mailbox {0}…' '邮箱 {0}…' 'Ящик {0}…'
-X 'mb_merge_file' 'Merge {0}: +{1} Nachrichten' 'Merge {0}: +{1} messages' '合并 {0}: +{1} 条消息' 'Слияние {0}: +{1} сообщ.'
-X 'mb_merge_fail' 'Merge fehlgeschlagen: {0} – {1}' 'Merge failed: {0} – {1}' '合并失败: {0} – {1}' 'Ошибка слияния: {0} – {1}'
-X 'mb_summary'    'Mailbox: {0} gemergt, {1} neu kopiert, {2} unverändert' 'Mailbox: {0} merged, {1} newly copied, {2} unchanged' '邮箱: {0} 个已合并, {1} 个新复制, {2} 个未变化' 'Ящик: слито {0}, скопировано новых {1}, без изменений {2}'
-X 'no_mailboxes'  'Keine Mailboxen gefunden.' 'No mailboxes found.' '未找到邮箱。' 'Почтовые ящики не найдены.'
-X 'f_copied'      '{0} kopiert' '{0} copied' '{0} 已复制' '{0} скопирован'
-X 'f_overwritten' '{0} überschrieben' '{0} overwritten' '{0} 已覆盖' '{0} перезаписан'
-X 'f_skipped'     '{0} übersprungen' '{0} skipped' '{0} 已跳过' '{0} пропущен'
-X 'f_identical'   '{0} identisch, nichts zu tun' '{0} identical, nothing to do' '{0} 相同，无需处理' '{0} идентичен, ничего не делаем'
-X 'f_missing'     '{0} nicht gefunden' '{0} not found' '未找到 {0}' '{0} не найден'
-X 'f_failed'      '{0} fehlgeschlagen: {1}' '{0} failed: {1}' '{0} 失败: {1}' '{0}: ошибка: {1}'
-X 'shots_done'    'Screenshots: {0} Bilder → {1}' 'Screenshots: {0} images → {1}' '截图: {0} 张 → {1}' 'Скриншоты: {0} изобр. → {1}'
-X 'shots_none'    'Screenshot-Ordner nicht gefunden' 'Screenshot folder not found' '未找到截图文件夹' 'Папка скриншотов не найдена'
-X 'undo_saved'    'Ersetzte Dateien gesichert in: {0}' 'Replaced files saved in: {0}' '被替换的文件已保存到: {0}' 'Заменённые файлы сохранены в: {0}'
-X 'result_title'  'Fertig' 'Done' '完成' 'Готово'
-X 'btn_open'      'Ordner öffnen' 'Open folder' '打开文件夹' 'Открыть папку'
-X 'btn_home'      'Zum Start' 'Back to start' '返回开始' 'В начало'
-X 'btn_close'     'Schließen' 'Close' '关闭' 'Закрыть'
-X 'btn_browse'    'Durchsuchen…' 'Browse…' '浏览…' 'Обзор…'
-X 'working'       'Bitte warten…' 'Please wait…' '请稍候…' 'Пожалуйста, подождите…'
-X 'step1'         '1. Scan' '1. Scan' '1. 扫描' '1. Поиск'
-X 'step2'         '2. Aktion' '2. Action' '2. 操作' '2. Действие'
-X 'step3'         '3. Quelle' '3. Source' '3. 来源' '3. Источник'
-X 'step4'         '4. Optionen' '4. Options' '4. 选项' '4. Параметры'
-X 'step5'         '5. Fertig' '5. Done' '5. 完成' '5. Готово'
-X 'hash_label'    'SHA256: {0}…' 'SHA256: {0}…' 'SHA256: {0}…' 'SHA256: {0}…'
-X 'hash_click'    '(Klicken zum Kopieren)' '(click to copy)' '（点击复制）' '(нажмите, чтобы скопировать)'
-X 'hash_copied'   'SHA256-Prüfsumme kopiert:' 'SHA256 checksum copied:' 'SHA256 校验和已复制:' 'Контрольная сумма SHA256 скопирована:'
-X 'hash_unknown'  'SHA256: (Pfad unbekannt)' 'SHA256: (path unknown)' 'SHA256: （路径未知）' 'SHA256: (путь неизвестен)'
+Initialize-Data
 
 function Resolve-Lang([string]$code) {
     if ([string]::IsNullOrWhiteSpace($code)) { return $null }
-    $c = $code.Trim().ToLowerInvariant()
-    if ($c.Length -ge 2) { $c = $c.Substring(0, 2) }
+    $c = $code.Trim().ToLowerInvariant().Replace('_', '-')
     if ($script:Langs -contains $c) { return $c }
+    if ($c.Length -ge 2 -and ($script:Langs -contains $c.Substring(0, 2))) { return $c.Substring(0, 2) }
     return $null
 }
 function Set-Lang([string]$code) {
@@ -245,23 +1101,55 @@ function T([string]$key, [object[]]$a) {
     if (-not $row) { return $key }
     $s = $row[$script:Lang]
     if ([string]::IsNullOrEmpty($s)) { $s = $row['en'] }
+    if ([string]::IsNullOrEmpty($s)) { return $key }
     if ($a -and $a.Count -gt 0) { return [string]::Format($s, $a) }
     return $s
 }
 
-# ── Konfiguration (Sprache + Sync-Ordner) ──────────────────────────────────────
+# ── Themes ─────────────────────────────────────────────────────────────────────
+function Get-SystemThemeBase {
+    if ($env:RF4_THEME_BASE -in @('dark', 'light')) { return $env:RF4_THEME_BASE }
+    try {
+        $v = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name AppsUseLightTheme -ErrorAction Stop).AppsUseLightTheme
+        if ($v -eq 0) { return 'dark' } else { return 'light' }
+    } catch { return 'dark' }
+}
+# choice: '' / 'auto' (= Windows-Einstellung) oder ein Theme-Code
+function Resolve-ThemeCode([string]$choice) {
+    $c = ([string]$choice).Trim().ToLowerInvariant()
+    if ($c -and $c -ne 'auto' -and $script:Themes.Contains($c)) { return $c }
+    $base = Get-SystemThemeBase
+    if ($script:Themes.Contains($base)) { return $base }
+    foreach ($k in $script:Themes.Keys) { if ($script:Themes[$k].base -eq $base) { return $k } }
+    return @($script:Themes.Keys)[0]
+}
+function Get-ThemeColors([string]$code) {
+    $t = $script:Themes[$code]
+    $fallback = $script:Themes['dark']
+    $out = @{}
+    foreach ($k in @('bg', 'surface', 'surface2', 'border', 'text', 'muted', 'accent', 'accentHover', 'accentText', 'success', 'warn', 'danger', 'selection')) {
+        $v = $null
+        if ($t -and $t.colors.ContainsKey($k)) { $v = $t.colors[$k] } elseif ($fallback -and $fallback.colors.ContainsKey($k)) { $v = $fallback.colors[$k] } else { $v = '#808080' }
+        $out[$k] = $v
+    }
+    return $out
+}
+
+# ── Konfiguration (Sprache, Theme, Sync-Ordner, Backup-Ordner) ─────────────────
 function Get-ConfigDir  { Join-Path $env:APPDATA 'rf4-backup' }
 function Get-ConfigFile { Join-Path (Get-ConfigDir) 'settings.json' }
 function Get-Config {
-    $cfg = @{ lang = ''; syncPath = '' }
+    $cfg = @{ lang = ''; theme = ''; syncPath = ''; backupDirs = @() }
     $f = Get-ConfigFile
     if (Test-Path -LiteralPath $f) {
         try {
             $j = [IO.File]::ReadAllText($f, [Text.Encoding]::UTF8).TrimStart([char]0xFEFF) | ConvertFrom-Json
-            foreach ($k in @('lang', 'syncPath')) {
+            foreach ($k in @('lang', 'theme', 'syncPath')) {
                 $p = $j.PSObject.Properties[$k]
                 if ($p -and $p.Value) { $cfg[$k] = [string]$p.Value }
             }
+            $bp = $j.PSObject.Properties['backupDirs']
+            if ($bp -and $null -ne $bp.Value) { $cfg.backupDirs = @($bp.Value | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
         } catch { }
     }
     # Altformat (v1.2/1.3): sync.conf
@@ -273,23 +1161,39 @@ function Get-Config {
 }
 function Save-Config([hashtable]$cfg) {
     New-Item -ItemType Directory -Force -Path (Get-ConfigDir) | Out-Null
-    $json = [pscustomobject]@{ lang = [string]$cfg.lang; syncPath = [string]$cfg.syncPath } | ConvertTo-Json
-    [IO.File]::WriteAllText((Get-ConfigFile), $json, (New-Object Text.UTF8Encoding($true)))
+    $o = [pscustomobject]@{ lang = [string]$cfg.lang; theme = [string]$cfg.theme; syncPath = [string]$cfg.syncPath; backupDirs = @($cfg.backupDirs) }
+    [IO.File]::WriteAllText((Get-ConfigFile), ($o | ConvertTo-Json), (New-Object Text.UTF8Encoding($true)))
 }
 function Get-SyncPath { [string](Get-Config).syncPath }
 function Set-SyncPath([string]$p) { $c = Get-Config; $c.syncPath = $p; Save-Config $c }
 function Save-Lang([string]$l)    { $c = Get-Config; $c.lang = $l;     Save-Config $c }
+function Save-ThemeChoice([string]$t) { $c = Get-Config; $c.theme = $t; Save-Config $c }
+function Add-BackupDir([string]$dir) {
+    if ([string]::IsNullOrWhiteSpace($dir)) { return }
+    $c = Get-Config
+    $full = try { [IO.Path]::GetFullPath($dir) } catch { $dir }
+    $list = @($full) + @($c.backupDirs | Where-Object { $_ -ne $full })
+    $c.backupDirs = @($list | Select-Object -First 8)
+    Save-Config $c
+}
 
 function Initialize-Lang([string]$Override) {
     $l = Resolve-Lang $Override
     if (-not $l) { $l = Resolve-Lang $env:RF4_LANG }
     if (-not $l) { $l = Resolve-Lang (Get-Config).lang }
+    if (-not $l) { $l = Resolve-Lang (Get-Culture).Name }
     if (-not $l) { $l = Resolve-Lang (Get-Culture).TwoLetterISOLanguageName }
     if (-not $l) { $l = 'en' }
     [void](Set-Lang $l)
 }
 
 # ── Logging an die UI ──────────────────────────────────────────────────────────
+# ── Statistik der letzten Operation (für Ergebnis-Anzeige) ─────────────────────
+function Reset-Stats { $script:Stats = @{ MsgAdded = 0; ConvNew = 0; ConvMerged = 0; FilesNew = 0; FilesReplaced = 0; FilesSkipped = 0; Shots = 0; Failed = 0 } }
+function Add-Stat([string]$k, [int]$n = 1) { if (-not $script:Stats) { Reset-Stats }; $script:Stats[$k] += $n }
+function Get-Stats { if (-not $script:Stats) { Reset-Stats }; return $script:Stats.Clone() }
+Reset-Stats
+
 function Write-Log([string]$level, [string]$key, [object[]]$a) {
     $msg = T $key $a
     if ($script:LogSink) { & $script:LogSink $level $msg }
@@ -512,6 +1416,7 @@ function Merge-Mailbox {
             Write-Log 'warn' 'mb_merge_fail' @($srcFile.Name, $_.Exception.Message)
         }
     }
+    Add-Stat MsgAdded $r.Added; Add-Stat ConvNew $r.Copied; Add-Stat ConvMerged $r.Merged; Add-Stat Failed $r.Failed
     Write-Log 'ok' 'mb_summary' @($r.Merged, $r.Copied, $r.Unchanged)
     return $r
 }
@@ -527,16 +1432,16 @@ function Copy-DatFile {
                 Write-Log 'info' 'f_identical' @($name); return 'identical'
             }
             $yes = if ($Confirm) { [bool](& $Confirm $name) } else { $false }
-            if (-not $yes) { Write-Log 'warn' 'f_skipped' @($name); return 'skipped' }
+            if (-not $yes) { Add-Stat FilesSkipped; Write-Log 'warn' 'f_skipped' @($name); return 'skipped' }
             Save-Undo $Dst $UndoRoot
             Copy-Item -LiteralPath $Src -Destination $Dst -Force
-            Write-Log 'ok' 'f_overwritten' @($name); return 'overwritten'
+            Add-Stat FilesReplaced; Write-Log 'ok' 'f_overwritten' @($name); return 'overwritten'
         }
         New-Item -ItemType Directory -Force -Path (Split-Path $Dst -Parent) | Out-Null
         Copy-Item -LiteralPath $Src -Destination $Dst
-        Write-Log 'ok' 'f_copied' @($name); return 'copied'
+        Add-Stat FilesNew; Write-Log 'ok' 'f_copied' @($name); return 'copied'
     } catch {
-        Write-Log 'err' 'f_failed' @($name, $_.Exception.Message); return 'failed'
+        Add-Stat Failed; Write-Log 'err' 'f_failed' @($name, $_.Exception.Message); return 'failed'
     }
 }
 
@@ -549,6 +1454,7 @@ function Copy-Screenshots([string]$SrcDir, [string]$DstDir) {
         $t = Join-Path $DstDir $img.Name
         if (-not (Test-Path -LiteralPath $t)) { Copy-Item -LiteralPath $img.FullName -Destination $t; $n++ }
     }
+    Add-Stat Shots $n
     Write-Log 'ok' 'shots_done' @($n, $DstDir)
     return $n
 }
@@ -576,6 +1482,51 @@ function Copy-Rf4Data {
         }
     }
     if ($UndoRoot -and (Test-Path -LiteralPath $UndoRoot)) { Write-Log 'info' 'undo_saved' @($UndoRoot) }
+}
+
+# Vorhandene Backups: Standardordner, gemerkte Ordner (settings.json) und je eine Ebene darunter
+function Test-LooksLikeBackup([string]$dir) {
+    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { return $false }
+    if (@(Get-ChildItem -LiteralPath $dir -Directory -Filter 'Mailbox_*' -ErrorAction SilentlyContinue).Count -gt 0) { return $true }
+    foreach ($f in $script:DatFiles) { if (Test-Path -LiteralPath (Join-Path $dir $f)) { return $true } }
+    return (Test-Path -LiteralPath (Join-Path $dir 'Screenshots') -PathType Container)
+}
+function Find-Backups {
+    $bases = New-Object System.Collections.Generic.List[string]
+    $bases.Add((Get-DefaultBackupDir))
+    foreach ($d in @((Get-Config).backupDirs)) { if ($d) { $bases.Add($d) } }
+    foreach ($x in @(([string]$env:RF4_BACKUP_DIRS) -split ';' | Where-Object { $_ })) { $bases.Add($x) }
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    $found = New-Object System.Collections.Generic.List[object]
+    foreach ($b in $bases) {
+        if (-not (Test-Path -LiteralPath $b -PathType Container)) { continue }
+        $cands = @($b) + @(Get-ChildItem -LiteralPath $b -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notlike 'Mailbox_*' -and $_.Name -ne 'Screenshots' } | ForEach-Object { $_.FullName })
+        foreach ($c in $cands) {
+            $norm = $c.TrimEnd('\').ToLowerInvariant()
+            if ($seen.Contains($norm) -or -not (Test-LooksLikeBackup $c)) { continue }
+            [void]$seen.Add($norm)
+            $bc = Get-BackupContents $c
+            $files = @(Get-ChildItem -LiteralPath $c -Recurse -File -ErrorAction SilentlyContinue)
+            $size = 0L; $latest = [datetime]::MinValue
+            foreach ($fi in $files) { $size += $fi.Length; if ($fi.LastWriteTime -gt $latest) { $latest = $fi.LastWriteTime } }
+            $convs = 0; foreach ($m in $bc.Mailboxes) { $convs += $m.Convs }
+            $found.Add([pscustomobject]@{ Path = $c; Name = (Split-Path $c -Leaf); Time = $latest; SizeBytes = $size; Mailboxes = $bc.Mailboxes.Count; Convs = $convs; Files = $bc.Files; Shots = $bc.Shots })
+        }
+    }
+    return @($found | Sort-Object Time -Descending)
+}
+function Format-Size([long]$b) {
+    if ($b -ge 1GB) { return ('{0:N1} GB' -f ($b / 1GB)) }
+    if ($b -ge 1MB) { return ('{0:N1} MB' -f ($b / 1MB)) }
+    if ($b -ge 1KB) { return ('{0:N0} KB' -f ($b / 1KB)) }
+    return "$b B"
+}
+function Format-BackupInfo($bk) {
+    $parts = @((T 'bk_mailbox_n' @($bk.Mailboxes, $bk.Convs)))
+    if ($bk.Files.Count -gt 0) { $parts += (T 'bk_files_n' @($bk.Files.Count)) }
+    if ($bk.Shots -gt 0) { $parts += (T 'bk_shots_n' @($bk.Shots)) }
+    $parts += (Format-Size $bk.SizeBytes)
+    return ($parts -join '  ·  ')
 }
 
 function Get-BackupContents([string]$dir) {
@@ -655,13 +1606,53 @@ try {
 
 Initialize-Lang $Lang
 
-function Write-Ok($m)   { Write-Host "  [OK] $m" -ForegroundColor Green }
-function Write-Info($m) { Write-Host "  --> $m"  -ForegroundColor Cyan }
-function Write-Warn($m) { Write-Host "  [!] $m"  -ForegroundColor Yellow }
-function Write-Err($m)  { Write-Host "  [X] $m"  -ForegroundColor Red }
-function Write-Sep      { Write-Host ('-' * 60) -ForegroundColor DarkGray }
-function Write-Hdr($t)  { Write-Host ''; Write-Host "== $t ==" -ForegroundColor Blue; Write-Sep }
+# ── Darstellung: Unicode-Rahmen wenn möglich, sonst ASCII (RF4_ASCII=1 erzwingt ASCII) ──
+$script:Uni = ($env:RF4_ASCII -ne '1')
+$script:G = if ($script:Uni) { @{ tl = '╔'; tr = '╗'; bl = '╚'; br = '╝'; h = '═'; v = '║'; line = '─'; ok = '✔'; warn = '!'; err = '✘'; info = '›'; dot = '·'; bar = '━'; on = '■'; off = '□' } }
+            else { @{ tl = '+'; tr = '+'; bl = '+'; br = '+'; h = '='; v = '|'; line = '-'; ok = 'OK'; warn = '!'; err = 'X'; info = '>'; dot = '-'; bar = '='; on = '[X]'; off = '[ ]' } }
+$script:Width = 64
 
+# Anzeigebreite (CJK/Fullwidth = 2 Spalten) – für saubere Rahmen auch in 中文
+function Get-DispWidth([string]$s) {
+    $w = 0
+    foreach ($ch in $s.ToCharArray()) {
+        $c = [int]$ch
+        if (($c -ge 0x1100 -and $c -le 0x115F) -or ($c -ge 0x2E80 -and $c -le 0xA4CF) -or ($c -ge 0xAC00 -and $c -le 0xD7A3) -or ($c -ge 0xF900 -and $c -le 0xFAFF) -or ($c -ge 0xFE30 -and $c -le 0xFE6F) -or ($c -ge 0xFF00 -and $c -le 0xFF60) -or ($c -ge 0xFFE0 -and $c -le 0xFFE6)) { $w += 2 } else { $w += 1 }
+    }
+    return $w
+}
+function Pad-Disp([string]$s, [int]$width) { $d = Get-DispWidth $s; if ($d -ge $width) { return $s }; return $s + (' ' * ($width - $d)) }
+
+function Write-Ok($m)   { Write-Host "  $($script:G.ok) " -ForegroundColor Green -NoNewline; Write-Host $m }
+function Write-Info($m) { Write-Host "  $($script:G.info) " -ForegroundColor Cyan -NoNewline; Write-Host $m }
+function Write-Warn($m) { Write-Host "  $($script:G.warn) " -ForegroundColor Yellow -NoNewline; Write-Host $m -ForegroundColor Yellow }
+function Write-Err($m)  { Write-Host "  $($script:G.err) " -ForegroundColor Red -NoNewline; Write-Host $m -ForegroundColor Red }
+function Write-Sep      { Write-Host ('  ' + ($script:G.line * ($script:Width - 4))) -ForegroundColor DarkCyan }
+function Write-Hdr($t)  {
+    Write-Host ''
+    $inner = ' ' + $t + ' '
+    $fill = [Math]::Max(2, $script:Width - 6 - (Get-DispWidth $inner))
+    Write-Host ('  ' + ($script:G.bar * 2)) -ForegroundColor Cyan -NoNewline; Write-Host $inner -ForegroundColor Cyan -NoNewline; Write-Host ($script:G.bar * $fill) -ForegroundColor Cyan
+}
+function Write-Box([string[]]$lines, [string]$color = 'Cyan') {
+    $inner = $script:Width - 4
+    Write-Host ('  ' + $script:G.tl + ($script:G.h * $inner) + $script:G.tr) -ForegroundColor $color
+    foreach ($l in $lines) { Write-Host ('  ' + $script:G.v) -ForegroundColor $color -NoNewline; Write-Host (' ' + (Pad-Disp $l ($inner - 1))) -NoNewline; Write-Host $script:G.v -ForegroundColor $color }
+    Write-Host ('  ' + $script:G.bl + ($script:G.h * $inner) + $script:G.br) -ForegroundColor $color
+}
+# Kennzahlen nach einer Operation
+function Write-Summary {
+    $st = Get-Stats
+    $items = @(@((T 'sum_msgs'), $st.MsgAdded, 'Cyan'), @((T 'sum_convs'), ($st.ConvNew + $st.ConvMerged), 'Green'), @((T 'sum_files'), ($st.FilesNew + $st.FilesReplaced), 'Green'))
+    if ($st.Shots -gt 0) { $items += , @((T 'sum_shots'), $st.Shots, 'Green') }
+    if ($st.FilesSkipped -gt 0) { $items += , @((T 'sum_skipped'), $st.FilesSkipped, 'Yellow') }
+    if ($st.Failed -gt 0) { $items += , @((T 'sum_failed'), $st.Failed, 'Red') }
+    Write-Host ''
+    Write-Host '  ' -NoNewline
+    foreach ($i in $items) { Write-Host ("$($script:G.on) ") -NoNewline -ForegroundColor $i[2]; Write-Host ("$($i[1]) ") -NoNewline -ForegroundColor $i[2]; Write-Host ("$($i[0])   ") -NoNewline }
+    Write-Host ''
+    if ($st.Failed -gt 0) { Write-Err (T 'res_err' @($st.Failed)) } else { Write-Ok (T 'res_ok') }
+}
 $script:LogSink = {
     param($lvl, $msg)
     switch ($lvl) {
@@ -680,9 +1671,9 @@ function Ask-Overwrite($name) {
 }
 
 function Show-Menu([string]$Title, [string[]]$Options) {
-    Write-Host ''; Write-Host "  $Title" -ForegroundColor White; Write-Sep
-    for ($i = 0; $i -lt $Options.Count; $i++) { Write-Host "  [$($i + 1)] $($Options[$i])" -ForegroundColor Yellow }
-    Write-Host "  [0] $(T 'back')" -ForegroundColor Yellow
+    Write-Host ''; Write-Host "  $Title" -ForegroundColor Cyan; Write-Sep
+    for ($i = 0; $i -lt $Options.Count; $i++) { Write-Host "  [$($i + 1)]" -ForegroundColor Yellow -NoNewline; Write-Host " $($Options[$i])" }
+    Write-Host "  [0]" -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'back')"
     Write-Host ''
     while ($true) {
         $raw = Read-Host "  $(T 'choose')"
@@ -698,12 +1689,12 @@ function Show-Menu([string]$Title, [string[]]$Options) {
 function Show-MultiSelect([string]$Title, [string[]]$Options) {
     $chosen = New-Object bool[] $Options.Count
     while ($true) {
-        Write-Host ''; Write-Host "  $Title" -ForegroundColor White
-        Write-Host "  $(T 'toggle_hint')" -ForegroundColor DarkGray; Write-Sep
+        Write-Host ''; Write-Host "  $Title" -ForegroundColor Cyan
+        Write-Host "  $(T 'toggle_hint')" -ForegroundColor DarkYellow; Write-Sep
         for ($i = 0; $i -lt $Options.Count; $i++) {
-            $mark = if ($chosen[$i]) { '[X]' } else { '[ ]' }
-            $col = if ($chosen[$i]) { 'Green' } else { 'DarkGray' }
-            Write-Host "  $mark $($i + 1)) $($Options[$i])" -ForegroundColor $col
+            $mark = if ($chosen[$i]) { $script:G.on } else { $script:G.off }
+            if ($chosen[$i]) { Write-Host "  $mark $($i + 1))" -ForegroundColor Green -NoNewline; Write-Host " $($Options[$i])" -ForegroundColor Green }
+            else { Write-Host "  $mark $($i + 1))" -ForegroundColor DarkYellow -NoNewline; Write-Host " $($Options[$i])" }
         }
         Write-Host ''
         $raw = Read-Host "  $(T 'choose')"
@@ -786,9 +1777,11 @@ function Do-Backup {
     if ([string]::IsNullOrWhiteSpace($dest)) { $dest = $def }
     Write-Info (T 'from' @($src.Path)); Write-Info (T 'to' @($dest)); Write-Sep
     try {
+        Reset-Stats
         Copy-Rf4Data -SrcDir $src.Path -DstDir $dest -Items $items -Accounts $accounts `
             -ShotsSrc (Get-ScreenshotDir $src.Path) -ShotsDst (Join-Path $dest 'Screenshots') -Confirm { param($n) Ask-Overwrite $n }
-        Write-Host ''; Write-Ok (T 'backup_done' @($dest))
+        Add-BackupDir $dest
+        Write-Host ''; Write-Ok (T 'backup_done' @($dest)); Write-Summary
     } catch { Write-Err $_.Exception.Message }
     Pause-Menu
 }
@@ -797,8 +1790,18 @@ function Do-Backup {
 function Do-Restore {
     Write-Hdr (T 'hdr_restore')
     $def = Get-DefaultBackupDir
-    $src = Read-Host ('  ' + (T 'backup_dir_p' @($def)))
-    if ([string]::IsNullOrWhiteSpace($src)) { $src = $def }
+    $bks = @(Find-Backups)
+    $src = $null
+    if ($bks.Count -gt 0) {
+        $opts = @($bks | ForEach-Object { "$($_.Name)   $($script:G.dot)   $($_.Time.ToString('yyyy-MM-dd HH:mm'))`n        $($_.Path)`n        $(Format-BackupInfo $_)" }) + @(T 'manual_path')
+        $c = Show-Menu (T 'pick_backup_list') $opts
+        if ($c -eq 0) { return }
+        if ($c -le $bks.Count) { $src = $bks[$c - 1].Path }
+    } else { Write-Warn (T 'no_backup_found_cli') }
+    if (-not $src) {
+        $src = Read-Host ('  ' + (T 'backup_dir_p' @($def)))
+        if ([string]::IsNullOrWhiteSpace($src)) { $src = $def }
+    }
     if (-not (Test-Path -LiteralPath $src)) { Write-Err (T 'folder_missing' @($src)); Pause-Menu; return }
     $bc = Get-BackupContents $src
     if ($bc.Empty) { Write-Warn (T 'no_backup_here'); Pause-Menu; return }
@@ -830,10 +1833,12 @@ function Do-Restore {
 
     Write-Info (T 'importing_to' @($dstPath)); Write-Sep
     try {
+        Reset-Stats
         Copy-Rf4Data -SrcDir $src -DstDir $dstPath -Items $items -Accounts $accounts `
             -ShotsSrc (Join-Path $src 'Screenshots') -ShotsDst (Get-ScreenshotDir $dstPath -Create) `
             -Confirm { param($n) Ask-Overwrite $n } -UndoRoot (New-UndoRoot $dstPath)
-        Write-Ok (T 'restore_done')
+        Add-BackupDir (Split-Path $src -Parent)
+        Write-Ok (T 'restore_done'); Write-Summary
     } catch { Write-Err $_.Exception.Message }
     Pause-Menu
 }
@@ -852,7 +1857,7 @@ function Do-Merge {
     $sel = Show-MultiSelect (T 'merge_src') @($srcs | ForEach-Object { Get-InstLabel $_ })
     if ($null -eq $sel -or @($sel).Count -eq 0) { Write-Warn (T 'pick_one_src'); Pause-Menu; return }
     if (-not (Confirm-GameClosed)) { Write-Warn (T 'cancelled'); Pause-Menu; return }
-    $undo = New-UndoRoot $dst.Path
+    $undo = New-UndoRoot $dst.Path; Reset-Stats
     Write-Info (T 'to' @($dst.Path)); Write-Sep
     foreach ($ix in $sel) {
         $s = $srcs[$ix]
@@ -861,7 +1866,7 @@ function Do-Merge {
         if ($acc -is [string] -and $acc -eq 'BACK') { continue }
         try { Copy-Rf4Data -SrcDir $s.Path -DstDir $dst.Path -Items @('mail') -Accounts $acc -UndoRoot $undo } catch { Write-Err $_.Exception.Message }
     }
-    Write-Ok (T 'merge_done')
+    Write-Ok (T 'merge_done'); Write-Summary
     Pause-Menu
 }
 
@@ -918,7 +1923,7 @@ function Do-Sync {
                     $inst = $ex[$c - 1]
                 }
                 if (-not (Confirm-GameClosed)) { Write-Warn (T 'cancelled'); Pause-Menu; continue }
-                try { Invoke-SyncRun -InstPath $inst.Path -SyncBase $sp } catch { Write-Err $_.Exception.Message }
+                try { Reset-Stats; Invoke-SyncRun -InstPath $inst.Path -SyncBase $sp; Write-Summary } catch { Write-Err $_.Exception.Message }
                 Pause-Menu
             }
             default { Write-Warn (T 'invalid') }
@@ -940,19 +1945,16 @@ function Do-Language {
 function Show-Main {
     while ($true) {
         try { Clear-Host } catch { }
-        Write-Host ('=' * 60) -ForegroundColor Blue
-        Write-Host ('  ' + (T 'app_title') + '   v' + $script:ToolVersion) -ForegroundColor Blue
-        Write-Host ('=' * 60) -ForegroundColor Blue
-        Write-Host '  RF4: nga.li/rf4de | Blog: nga.li/rf4b' -ForegroundColor DarkGray
-        Write-Host ('  ' + (T 'donate')) -ForegroundColor DarkGray
+        Write-Box @(
+            ((T 'app_title') + '   v' + $script:ToolVersion),
+            ('RF4: nga.li/rf4de  ' + $script:G.dot + '  Blog: nga.li/rf4b'),
+            (T 'donate')
+        ) 'Cyan'
         Write-Host ''
-        Write-Host "  [1] $(T 'menu_scan')"    -ForegroundColor Yellow
-        Write-Host "  [2] $(T 'menu_backup')"  -ForegroundColor Yellow
-        Write-Host "  [3] $(T 'menu_restore')" -ForegroundColor Yellow
-        Write-Host "  [4] $(T 'menu_merge')"   -ForegroundColor Yellow
-        Write-Host "  [5] $(T 'menu_sync')"    -ForegroundColor Yellow
-        Write-Host "  [L] $(T 'menu_lang') ($($script:LangNames[$script:Lang]))" -ForegroundColor Yellow
-        Write-Host "  [0] $(T 'exit')"         -ForegroundColor Yellow
+        $mi = @(@('1', 'menu_scan'), @('2', 'menu_backup'), @('3', 'menu_restore'), @('4', 'menu_merge'), @('5', 'menu_sync'))
+        foreach ($m in $mi) { Write-Host "   [$($m[0])]" -ForegroundColor Yellow -NoNewline; Write-Host " $(T $m[1])" }
+        Write-Host '   [L]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'menu_lang')  " -NoNewline; Write-Host "($($script:LangNames[$script:Lang]))" -ForegroundColor Cyan
+        Write-Host '   [0]' -ForegroundColor Yellow -NoNewline; Write-Host " $(T 'exit')"
         Write-Host ''
         $raw = Read-Host "  $(T 'choose')"
         if ($null -eq $raw) { return }

@@ -242,6 +242,53 @@ try {
         $nonAscii1 = ([regex]::Matches($t1, '[^\u0000-\u007F]')).Count; $nonAscii2 = ([regex]::Matches($t2, '[^\u0000-\u007F]')).Count
         Write-Host ("        Info: Zeichen >127 Original={0}, Roundtrip={1}; Bytes {2} → {3}" -f $nonAscii1, $nonAscii2, (Get-Item $f0.FullName).Length, (Get-Item $copy).Length) -ForegroundColor DarkGray
     } else { Write-Host '  (übersprungen – -RealDataDir nicht angegeben)' -ForegroundColor DarkGray }
+
+    Write-Host "`n[8] Backups finden, Statistik, Themes, Module" -ForegroundColor Cyan
+    $dflt = Get-DefaultBackupDir
+    Ok (@(Find-Backups).Count -eq 0) 'Find-Backups: ohne Backups leer'
+    Reset-Stats
+    Copy-Rf4Data -SrcDir $steam -DstDir $dflt -Items @('mail', 'Settings.dat') -Confirm { $true }
+    $stt = Get-Stats
+    Ok ($stt.ConvNew -eq 2 -and $stt.FilesNew -eq 1 -and $stt.MsgAdded -eq 0) "Statistik nach Backup: 2 Konversationen neu, 1 Datei ($($stt | ConvertTo-Json -Compress))"
+    Reset-Stats; Copy-Rf4Data -SrcDir $steam -DstDir $dflt -Items @('mail', 'Settings.dat') -Confirm { $true }
+    $stt = Get-Stats; Ok ($stt.ConvNew -eq 0 -and $stt.MsgAdded -eq 0 -and $stt.FilesNew -eq 0) 'Statistik zweiter Lauf: nichts Neues'
+    $bks = @(Find-Backups)
+    Ok ($bks.Count -ge 1 -and $bks[0].Path -eq $dflt -and $bks[0].Mailboxes -eq 2 -and $bks[0].Convs -eq 2) 'Find-Backups: Standardordner erkannt (2 Mailboxen, 2 Konv.)'
+    $multi = Join-Path $tmp 'mybackups'; Copy-Rf4Data -SrcDir $steam -DstDir (Join-Path $multi 'Steam_alt') -Items @('mail') -Confirm { $true }; Copy-Rf4Data -SrcDir $de -DstDir (Join-Path $multi 'DE_neu') -Items @('mail', 'Settings.dat') -Confirm { $true }
+    (Get-Item (Join-Path $multi 'DE_neu\Settings.dat')).LastWriteTime = (Get-Date).AddDays(1)
+    $env:RF4_BACKUP_DIRS = $multi
+    $bks = @(Find-Backups)
+    Ok (@($bks | Where-Object { $_.Name -in 'Steam_alt', 'DE_neu' }).Count -eq 2) 'Find-Backups: Unterordner eines gemerkten Ordners'
+    Ok ($bks[0].Name -eq 'DE_neu') 'Find-Backups: neueste zuerst'
+    Ok ((Format-BackupInfo $bks[0]) -match '\d' -and (Format-BackupInfo $bks[0]) -notmatch '\{\d\}') 'Format-BackupInfo'
+    $env:RF4_BACKUP_DIRS = ''
+    Add-BackupDir (Join-Path $tmp 'a'); Add-BackupDir (Join-Path $tmp 'b'); Add-BackupDir (Join-Path $tmp 'a')
+    $bd = @((Get-Config).backupDirs); Ok ($bd.Count -eq 2 -and $bd[0] -like '*\a') 'Add-BackupDir: ohne Duplikate, neueste zuerst'
+    1..10 | ForEach-Object { Add-BackupDir (Join-Path $tmp "x$_") }; Ok (@((Get-Config).backupDirs).Count -eq 8) 'Add-BackupDir: maximal 8'
+    $env:RF4_THEME_BASE = 'dark'; Ok ((Resolve-ThemeCode 'auto') -eq 'dark') 'Theme auto + Windows dunkel = dark'
+    $env:RF4_THEME_BASE = 'light'; Ok ((Resolve-ThemeCode '') -eq 'light' -and (Resolve-ThemeCode 'dark') -eq 'dark' -and (Resolve-ThemeCode 'gibtsnicht') -eq 'light') 'Theme: auto/leer/explizit/unbekannt'
+    $env:RF4_THEME_BASE = ''
+    foreach ($tc in $script:Themes.Keys) { $c = Get-ThemeColors $tc; Ok (@($c.Values | Where-Object { $_ -notmatch '^#[0-9A-Fa-f]{6}$' }).Count -eq 0 -and $c.Count -eq 13) "Theme '$tc': 13 gültige Farben" }
+    # Kontrast (WCAG) Text/Hintergrund und Akzent/Akzenttext
+    function Lum($hex) { $h = $hex.TrimStart('#'); $v = 0..2 | ForEach-Object { $c = [Convert]::ToInt32($h.Substring($_ * 2, 2), 16) / 255.0; if ($c -le 0.03928) { $c / 12.92 } else { [Math]::Pow(($c + 0.055) / 1.055, 2.4) } }; 0.2126 * $v[0] + 0.7152 * $v[1] + 0.0722 * $v[2] }
+    function Contrast($a, $b) { $l1 = Lum $a; $l2 = Lum $b; if ($l1 -lt $l2) { $t = $l1; $l1 = $l2; $l2 = $t }; ($l1 + 0.05) / ($l2 + 0.05) }
+    foreach ($tc in $script:Themes.Keys) {
+        $c = Get-ThemeColors $tc
+        Ok ((Contrast $c.text $c.bg) -ge 7) "Theme '$tc': Text/Hintergrund Kontrast $([Math]::Round((Contrast $c.text $c.bg),1)) (>= 7)"
+        Ok ((Contrast $c.accentText $c.accent) -ge 4.5) "Theme '$tc': Akzent/Akzent-Text Kontrast $([Math]::Round((Contrast $c.accentText $c.accent),1)) (>= 4.5)"
+        Ok ((Contrast $c.muted $c.surface) -ge 3.5) "Theme '$tc': gedämpfter Text auf Karte Kontrast $([Math]::Round((Contrast $c.muted $c.surface),1)) (>= 3.5)"
+    }
+    # externe Module
+    $ext = Join-Path $env:APPDATA 'rf4-backup'; New-Item -ItemType Directory -Force -Path "$ext\lang", "$ext\themes" | Out-Null
+    [IO.File]::WriteAllText("$ext\lang\pt.lang", "# Test`n@code=pt`n@name=Português`napp_title=RF4 Cópia e Migração`nmenu_scan=Procurar = tudo`n", (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText("$ext\themes\x.theme", "@code=x`n@name=X`n@base=light`naccent=#112233`nbad=nope`n", (New-Object Text.UTF8Encoding($false)))
+    Initialize-Data
+    Ok (($script:Langs -contains 'pt') -and $script:Langs[0] -eq 'de' -and $script:Langs[-1] -eq 'pt') 'Externe Sprache pt: geladen, Reihenfolge de en zh ru + pt'
+    [void](Set-Lang 'pt'); Ok ((T 'app_title') -eq 'RF4 Cópia e Migração' -and (T 'menu_scan') -eq 'Procurar = tudo' -and (T 'exit') -eq 'Exit') 'pt: Text mit "=" korrekt, fehlende Schlüssel → Englisch'
+    Ok ((Resolve-Lang 'pt-BR') -eq 'pt') 'Resolve-Lang pt-BR → pt'
+    Ok ((Get-ThemeColors 'x').accent -eq '#112233' -and (Get-ThemeColors 'x').bg -eq '#0B1B2B' -and $script:Themes['x'].base -eq 'light') 'Externes Theme: Teilfarben + Rest aus Dunkel, ungültige Werte ignoriert'
+    [IO.Directory]::Delete("$ext\lang", $true); [IO.Directory]::Delete("$ext\themes", $true); Initialize-Data; [void](Set-Lang 'de')
+    Ok (-not ($script:Langs -contains 'pt')) 'Nach Entfernen der Dateien ist pt wieder weg'
 }
 finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

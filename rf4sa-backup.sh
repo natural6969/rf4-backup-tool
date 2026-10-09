@@ -12,18 +12,22 @@
 # Download:      https://nga.li/rf4dl
 # Spenden/Donate: https://paypal.me/bjoernoppermann
 #
-# Version 1.4.0 – 2026-10-09
+# Version 1.5.0 – 2026-10-09
 
 set -uo pipefail
 shopt -u patsub_replacement 2>/dev/null || true   # '&' in Ersetzungstexten nicht speziell behandeln (bash 5.2+)
 
-TOOL_VERSION="1.4.0"
-LANGS=(de en zh ru)
-declare -A LANG_NAMES=([de]="Deutsch" [en]="English" [zh]="中文" [ru]="Русский")
+TOOL_VERSION="1.5.0"
+# UTF-8 sicherstellen (Rahmen, 中文, Русский): bei LANG=C auf C.UTF-8 ausweichen
+if [[ "$(locale charmap 2>/dev/null)" != "UTF-8" ]]; then export LC_ALL=C.UTF-8 2>/dev/null; fi
+LANGS=()
+declare -A LANG_NAMES=()
 DAT_FILES=(Settings.dat Preferences.dat Crafting.dat)
 
 # ── Übersetzungen (generiert aus src/core.ps1 – eine Quelle für Windows und Linux) ──
 declare -A TX
+LANGS+=('de')
+LANG_NAMES[de]='Deutsch'
 TX[de:acct_line]='Account {0}  ({1} Konversationen)'
 TX[de:act_backup]='Backup erstellen'
 TX[de:act_backup_d]='RF4-Daten (Chats, Einstellungen, Screenshots) in einen Ordner sichern.'
@@ -134,11 +138,11 @@ TX[de:scan_total]='Gesamt: {0} Pfade geprüft'
 TX[de:scanning]='Suche auf allen Laufwerken…'
 TX[de:shots_done]='Screenshots: {0} Bilder → {1}'
 TX[de:shots_none]='Screenshot-Ordner nicht gefunden'
-TX[de:step1]='1. Scan'
-TX[de:step2]='2. Aktion'
-TX[de:step3]='3. Quelle'
-TX[de:step4]='4. Optionen'
-TX[de:step5]='5. Fertig'
+TX[de:step1]='Scan'
+TX[de:step2]='Aktion'
+TX[de:step3]='Auswahl'
+TX[de:step4]='Ausführen'
+TX[de:step5]='Ergebnis'
 TX[de:sync_cfg]='Sync-Ordner konfigurieren'
 TX[de:sync_dir_lbl]='Sync-Ordner:'
 TX[de:sync_done]='Sync abgeschlossen!'
@@ -197,6 +201,63 @@ TX[de:which_acct_r]='Welchen Account importieren?'
 TX[de:working]='Bitte warten…'
 TX[de:yes_char]='j'
 TX[de:yn_overwrite]='{0} existiert bereits. Überschreiben? [j/N]'
+TX[de:overwrite_q]='{0} existiert bereits.{1}Überschreiben?'
+TX[de:sel_account]='Account:'
+TX[de:scan_hint]='Das Tool sucht automatisch auf allen Laufwerken nach RF4-Installationen.'
+TX[de:rescan]='Neu suchen'
+TX[de:target_none]='Keine passende Ziel-Installation vorhanden.'
+TX[de:backup_to]='Backup-Zielordner'
+TX[de:preview]='Inhalt des Backups:'
+TX[de:undo_hint]='Ersetzte Dateien werden vorher nach _rf4tool_undo kopiert.'
+TX[de:theme_label]='Design'
+TX[de:theme_auto]='Automatisch (wie Windows)'
+TX[de:tip_lang]='Sprache ändern'
+TX[de:tip_theme]='Design ändern'
+TX[de:bk_mailbox_n]='{0} Mailboxen · {1} Konversationen'
+TX[de:bk_files_n]='Einstellungsdateien: {0}'
+TX[de:bk_shots_n]='Screenshots: {0}'
+TX[de:existing_backups]='Vorhandene Backups'
+TX[de:no_existing_backups]='Noch keine Backups gefunden – wähle einen Ordner.'
+TX[de:other_folder]='Anderen Ordner wählen…'
+TX[de:last_change]='Zuletzt geändert: {0}'
+TX[de:chip_found]='vorhanden'
+TX[de:chip_missing]='nicht vorhanden'
+TX[de:convs_short]='Konversationen'
+TX[de:sum_msgs]='Nachrichten ergänzt'
+TX[de:sum_convs]='Konversationen'
+TX[de:sum_files]='Dateien kopiert'
+TX[de:sum_shots]='Screenshots'
+TX[de:sum_skipped]='übersprungen'
+TX[de:sum_failed]='Fehler'
+TX[de:show_details]='Details anzeigen'
+TX[de:hide_details]='Details ausblenden'
+TX[de:res_ok]='Fertig – ohne Fehler.'
+TX[de:res_err]='Abgeschlossen, aber mit {0} Fehler(n). Details ansehen.'
+TX[de:working_title]='Bitte nicht schließen – das kann einen Moment dauern.'
+TX[de:btn_done]='Fertig'
+TX[de:btn_start_over]='Neue Aktion'
+TX[de:hdr_scan_t]='Installationen'
+TX[de:hdr_action_t]='Was möchtest du tun?'
+TX[de:hdr_backup_t]='Backup erstellen'
+TX[de:hdr_restore_t]='Backup wiederherstellen'
+TX[de:hdr_merge_t]='Installationen zusammenführen'
+TX[de:hdr_sync_t]='Cloud / NAS Sync'
+TX[de:to_target]='Ziel'
+TX[de:no_backup_found_cli]='Keine Backups in den üblichen Ordnern – Pfad eingeben.'
+TX[de:pick_backup_list]='Backup wählen'
+TX[de:theme_name_dark]='Dunkel (Marine)'
+TX[de:theme_name_light]='Hell'
+TX[de:open_folder_tip]='Öffnet den Ordner im Explorer'
+TX[de:accounts_all]='Alle Accounts'
+TX[de:tip_card_select]='Zum Auswählen anklicken'
+TX[de:select_backup_first]='Bitte zuerst ein Backup wählen.'
+TX[de:sync_run_btn]='Sync starten'
+TX[de:sync_status_btn]='Status anzeigen'
+TX[de:dialog_yes]='Ja'
+TX[de:dialog_no]='Nein'
+TX[de:dialog_ok]='OK'
+LANGS+=('en')
+LANG_NAMES[en]='English'
 TX[en:acct_line]='Account {0}  ({1} conversations)'
 TX[en:act_backup]='Create backup'
 TX[en:act_backup_d]='Save RF4 data (chats, settings, screenshots) to a folder.'
@@ -307,11 +368,11 @@ TX[en:scan_total]='Total: {0} paths checked'
 TX[en:scanning]='Searching all drives…'
 TX[en:shots_done]='Screenshots: {0} images → {1}'
 TX[en:shots_none]='Screenshot folder not found'
-TX[en:step1]='1. Scan'
-TX[en:step2]='2. Action'
-TX[en:step3]='3. Source'
-TX[en:step4]='4. Options'
-TX[en:step5]='5. Done'
+TX[en:step1]='Scan'
+TX[en:step2]='Action'
+TX[en:step3]='Selection'
+TX[en:step4]='Run'
+TX[en:step5]='Result'
 TX[en:sync_cfg]='Configure sync folder'
 TX[en:sync_dir_lbl]='Sync folder:'
 TX[en:sync_done]='Sync finished!'
@@ -370,6 +431,63 @@ TX[en:which_acct_r]='Which account to import?'
 TX[en:working]='Please wait…'
 TX[en:yes_char]='y'
 TX[en:yn_overwrite]='{0} already exists. Overwrite? [y/N]'
+TX[en:overwrite_q]='{0} already exists.{1}Overwrite?'
+TX[en:sel_account]='Account:'
+TX[en:scan_hint]='The tool automatically searches all drives for RF4 installations.'
+TX[en:rescan]='Rescan'
+TX[en:target_none]='No suitable target installation available.'
+TX[en:backup_to]='Backup target folder'
+TX[en:preview]='Backup contents:'
+TX[en:undo_hint]='Files that get replaced are copied to _rf4tool_undo first.'
+TX[en:theme_label]='Theme'
+TX[en:theme_auto]='Automatic (like Windows)'
+TX[en:tip_lang]='Change language'
+TX[en:tip_theme]='Change theme'
+TX[en:bk_mailbox_n]='{0} mailboxes · {1} conversations'
+TX[en:bk_files_n]='settings files: {0}'
+TX[en:bk_shots_n]='screenshots: {0}'
+TX[en:existing_backups]='Existing backups'
+TX[en:no_existing_backups]='No backups found yet – choose a folder.'
+TX[en:other_folder]='Choose another folder…'
+TX[en:last_change]='Last changed: {0}'
+TX[en:chip_found]='found'
+TX[en:chip_missing]='not present'
+TX[en:convs_short]='conversations'
+TX[en:sum_msgs]='messages added'
+TX[en:sum_convs]='conversations'
+TX[en:sum_files]='files copied'
+TX[en:sum_shots]='screenshots'
+TX[en:sum_skipped]='skipped'
+TX[en:sum_failed]='errors'
+TX[en:show_details]='Show details'
+TX[en:hide_details]='Hide details'
+TX[en:res_ok]='Done – no errors.'
+TX[en:res_err]='Finished, but with {0} error(s). See details.'
+TX[en:working_title]='Please do not close – this may take a moment.'
+TX[en:btn_done]='Done'
+TX[en:btn_start_over]='New action'
+TX[en:hdr_scan_t]='Installations'
+TX[en:hdr_action_t]='What would you like to do?'
+TX[en:hdr_backup_t]='Create backup'
+TX[en:hdr_restore_t]='Restore backup'
+TX[en:hdr_merge_t]='Merge installations'
+TX[en:hdr_sync_t]='Cloud / NAS sync'
+TX[en:to_target]='Target'
+TX[en:no_backup_found_cli]='No backups in the usual folders – enter a path.'
+TX[en:pick_backup_list]='Choose a backup'
+TX[en:theme_name_dark]='Dark (navy)'
+TX[en:theme_name_light]='Light'
+TX[en:open_folder_tip]='Opens the folder in Explorer'
+TX[en:accounts_all]='All accounts'
+TX[en:tip_card_select]='Click to select'
+TX[en:select_backup_first]='Please choose a backup first.'
+TX[en:sync_run_btn]='Start sync'
+TX[en:sync_status_btn]='Show status'
+TX[en:dialog_yes]='Yes'
+TX[en:dialog_no]='No'
+TX[en:dialog_ok]='OK'
+LANGS+=('zh')
+LANG_NAMES[zh]='中文'
 TX[zh:acct_line]='账号 {0}  ({1} 个对话)'
 TX[zh:act_backup]='创建备份'
 TX[zh:act_backup_d]='将 RF4 数据（聊天、设置、截图）保存到文件夹。'
@@ -480,11 +598,11 @@ TX[zh:scan_total]='共检查 {0} 个路径'
 TX[zh:scanning]='正在搜索所有驱动器…'
 TX[zh:shots_done]='截图: {0} 张 → {1}'
 TX[zh:shots_none]='未找到截图文件夹'
-TX[zh:step1]='1. 扫描'
-TX[zh:step2]='2. 操作'
-TX[zh:step3]='3. 来源'
-TX[zh:step4]='4. 选项'
-TX[zh:step5]='5. 完成'
+TX[zh:step1]='扫描'
+TX[zh:step2]='操作'
+TX[zh:step3]='选择'
+TX[zh:step4]='执行'
+TX[zh:step5]='结果'
 TX[zh:sync_cfg]='配置同步文件夹'
 TX[zh:sync_dir_lbl]='同步文件夹:'
 TX[zh:sync_done]='同步完成！'
@@ -543,6 +661,63 @@ TX[zh:which_acct_r]='导入哪个账号？'
 TX[zh:working]='请稍候…'
 TX[zh:yes_char]='y'
 TX[zh:yn_overwrite]='{0} 已存在。是否覆盖？[y/N]'
+TX[zh:overwrite_q]='{0} 已存在。{1}是否覆盖？'
+TX[zh:sel_account]='账号:'
+TX[zh:scan_hint]='本工具会自动在所有驱动器上搜索 RF4 安装。'
+TX[zh:rescan]='重新扫描'
+TX[zh:target_none]='没有合适的目标安装。'
+TX[zh:backup_to]='备份目标文件夹'
+TX[zh:preview]='备份内容:'
+TX[zh:undo_hint]='被替换的文件会先复制到 _rf4tool_undo。'
+TX[zh:theme_label]='外观'
+TX[zh:theme_auto]='自动（跟随 Windows）'
+TX[zh:tip_lang]='切换语言'
+TX[zh:tip_theme]='切换外观'
+TX[zh:bk_mailbox_n]='{0} 个邮箱 · {1} 个对话'
+TX[zh:bk_files_n]='设置文件: {0}'
+TX[zh:bk_shots_n]='截图: {0}'
+TX[zh:existing_backups]='现有备份'
+TX[zh:no_existing_backups]='尚未找到备份——请选择一个文件夹。'
+TX[zh:other_folder]='选择其他文件夹…'
+TX[zh:last_change]='最后修改: {0}'
+TX[zh:chip_found]='已找到'
+TX[zh:chip_missing]='不存在'
+TX[zh:convs_short]='对话'
+TX[zh:sum_msgs]='条消息已补充'
+TX[zh:sum_convs]='个对话'
+TX[zh:sum_files]='个文件已复制'
+TX[zh:sum_shots]='张截图'
+TX[zh:sum_skipped]='已跳过'
+TX[zh:sum_failed]='个错误'
+TX[zh:show_details]='显示详情'
+TX[zh:hide_details]='隐藏详情'
+TX[zh:res_ok]='完成——没有错误。'
+TX[zh:res_err]='已完成，但有 {0} 个错误。请查看详情。'
+TX[zh:working_title]='请勿关闭——这可能需要一点时间。'
+TX[zh:btn_done]='完成'
+TX[zh:btn_start_over]='新操作'
+TX[zh:hdr_scan_t]='安装'
+TX[zh:hdr_action_t]='您想做什么？'
+TX[zh:hdr_backup_t]='创建备份'
+TX[zh:hdr_restore_t]='恢复备份'
+TX[zh:hdr_merge_t]='合并安装'
+TX[zh:hdr_sync_t]='云 / NAS 同步'
+TX[zh:to_target]='目标'
+TX[zh:no_backup_found_cli]='常用文件夹中没有备份——请输入路径。'
+TX[zh:pick_backup_list]='选择备份'
+TX[zh:theme_name_dark]='深色（海军蓝）'
+TX[zh:theme_name_light]='浅色'
+TX[zh:open_folder_tip]='在资源管理器中打开文件夹'
+TX[zh:accounts_all]='所有账号'
+TX[zh:tip_card_select]='点击选择'
+TX[zh:select_backup_first]='请先选择一个备份。'
+TX[zh:sync_run_btn]='开始同步'
+TX[zh:sync_status_btn]='显示状态'
+TX[zh:dialog_yes]='是'
+TX[zh:dialog_no]='否'
+TX[zh:dialog_ok]='确定'
+LANGS+=('ru')
+LANG_NAMES[ru]='Русский'
 TX[ru:acct_line]='Аккаунт {0}  (диалогов: {1})'
 TX[ru:act_backup]='Создать резервную копию'
 TX[ru:act_backup_d]='Сохранить данные RF4 (чаты, настройки, скриншоты) в папку.'
@@ -653,11 +828,11 @@ TX[ru:scan_total]='Всего проверено путей: {0}'
 TX[ru:scanning]='Поиск на всех дисках…'
 TX[ru:shots_done]='Скриншоты: {0} изобр. → {1}'
 TX[ru:shots_none]='Папка скриншотов не найдена'
-TX[ru:step1]='1. Поиск'
-TX[ru:step2]='2. Действие'
-TX[ru:step3]='3. Источник'
-TX[ru:step4]='4. Параметры'
-TX[ru:step5]='5. Готово'
+TX[ru:step1]='Поиск'
+TX[ru:step2]='Действие'
+TX[ru:step3]='Выбор'
+TX[ru:step4]='Запуск'
+TX[ru:step5]='Итог'
 TX[ru:sync_cfg]='Настроить папку синхронизации'
 TX[ru:sync_dir_lbl]='Папка синхронизации:'
 TX[ru:sync_done]='Синхронизация завершена!'
@@ -716,8 +891,64 @@ TX[ru:which_acct_r]='Какой аккаунт импортировать?'
 TX[ru:working]='Пожалуйста, подождите…'
 TX[ru:yes_char]='д'
 TX[ru:yn_overwrite]='{0} уже существует. Перезаписать? [д/Н]'
+TX[ru:overwrite_q]='{0} уже существует.{1}Перезаписать?'
+TX[ru:sel_account]='Аккаунт:'
+TX[ru:scan_hint]='Программа автоматически ищет установки RF4 на всех дисках.'
+TX[ru:rescan]='Искать заново'
+TX[ru:target_none]='Подходящая целевая установка отсутствует.'
+TX[ru:backup_to]='Папка для копии'
+TX[ru:preview]='Содержимое копии:'
+TX[ru:undo_hint]='Заменяемые файлы сначала копируются в _rf4tool_undo.'
+TX[ru:theme_label]='Тема'
+TX[ru:theme_auto]='Автоматически (как в Windows)'
+TX[ru:tip_lang]='Сменить язык'
+TX[ru:tip_theme]='Сменить тему'
+TX[ru:bk_mailbox_n]='Ящиков: {0} · диалогов: {1}'
+TX[ru:bk_files_n]='файлов настроек: {0}'
+TX[ru:bk_shots_n]='скриншотов: {0}'
+TX[ru:existing_backups]='Найденные резервные копии'
+TX[ru:no_existing_backups]='Резервные копии не найдены — выберите папку.'
+TX[ru:other_folder]='Выбрать другую папку…'
+TX[ru:last_change]='Изменено: {0}'
+TX[ru:chip_found]='найдено'
+TX[ru:chip_missing]='нет'
+TX[ru:convs_short]='диалогов'
+TX[ru:sum_msgs]='сообщений добавлено'
+TX[ru:sum_convs]='диалогов'
+TX[ru:sum_files]='файлов скопировано'
+TX[ru:sum_shots]='скриншотов'
+TX[ru:sum_skipped]='пропущено'
+TX[ru:sum_failed]='ошибок'
+TX[ru:show_details]='Показать подробности'
+TX[ru:hide_details]='Скрыть подробности'
+TX[ru:res_ok]='Готово — без ошибок.'
+TX[ru:res_err]='Завершено, но с ошибками: {0}. Смотрите подробности.'
+TX[ru:working_title]='Не закрывайте — это может занять некоторое время.'
+TX[ru:btn_done]='Готово'
+TX[ru:btn_start_over]='Новое действие'
+TX[ru:hdr_scan_t]='Установки'
+TX[ru:hdr_action_t]='Что вы хотите сделать?'
+TX[ru:hdr_backup_t]='Создать резервную копию'
+TX[ru:hdr_restore_t]='Восстановить из копии'
+TX[ru:hdr_merge_t]='Объединить установки'
+TX[ru:hdr_sync_t]='Синхронизация облако / NAS'
+TX[ru:to_target]='Цель'
+TX[ru:no_backup_found_cli]='В обычных папках копий нет — введите путь.'
+TX[ru:pick_backup_list]='Выберите резервную копию'
+TX[ru:theme_name_dark]='Тёмная (морская)'
+TX[ru:theme_name_light]='Светлая'
+TX[ru:open_folder_tip]='Открывает папку в проводнике'
+TX[ru:accounts_all]='Все аккаунты'
+TX[ru:tip_card_select]='Нажмите, чтобы выбрать'
+TX[ru:select_backup_first]='Сначала выберите резервную копию.'
+TX[ru:sync_run_btn]='Начать синхронизацию'
+TX[ru:sync_status_btn]='Показать состояние'
+TX[ru:dialog_yes]='Да'
+TX[ru:dialog_no]='Нет'
+TX[ru:dialog_ok]='ОК'
 
 # ── Konfiguration / Sprache ────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/rf4-backup"
 CONFIG_FILE="$CONFIG_DIR/settings.conf"
 
@@ -733,9 +964,34 @@ cfg_set() {   # cfg_set key value
     { [[ -f "$CONFIG_FILE" ]] && grep -v "^$1=" "$CONFIG_FILE" 2>/dev/null; printf '%s=%s\n' "$1" "$2"; } > "$tmp" || true
     mv "$tmp" "$CONFIG_FILE"
 }
-resolve_lang() {
-    local c="${1:-}"; c="${c,,}"; c="${c:0:2}"
-    case "$c" in de|en|zh|ru) printf '%s' "$c" ;; esac
+resolve_lang() {   # exakt (pt-br), sonst die ersten 2 Zeichen – nur geladene Sprachen
+    local c="${1:-}"; c="${c,,}"; c="${c//_/-}"; c="${c%%.*}"
+    local l
+    for l in "${LANGS[@]}"; do [[ "$l" == "$c" ]] && { printf '%s' "$l"; return; }; done
+    c="${c:0:2}"
+    for l in "${LANGS[@]}"; do [[ "$l" == "$c" ]] && { printf '%s' "$l"; return; }; done
+}
+# Weitere Sprachen: Dateien lang/*.lang neben dem Skript oder in ~/.config/rf4-backup/lang/ (Format key=Text, @code=, @name=)
+load_lang_file() {
+    local f="$1" code="" line k v l known
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"; line="${line#$'\xEF\xBB\xBF'}"
+        [[ -z "$line" || "${line:0:1}" == "#" || "$line" != *=* ]] && continue
+        k="${line%%=*}"; v="${line#*=}"
+        if [[ "${k:0:1}" == "@" ]]; then
+            case "${k:1}" in
+                code) code="${v,,}"; known=0; for l in "${LANGS[@]}"; do [[ "$l" == "$code" ]] && known=1; done; (( known )) || LANGS+=("$code") ;;
+                name) [[ -n "$code" ]] && LANG_NAMES[$code]="$v" ;;
+            esac
+        elif [[ -n "$code" ]]; then TX[$code:$k]="$v"; fi
+    done < "$f"
+}
+load_external_langs() {
+    local d f
+    for d in "$SCRIPT_DIR/lang" "$CONFIG_DIR/lang"; do
+        [[ -d "$d" ]] || continue
+        for f in "$d"/*.lang; do [[ -f "$f" ]] && load_lang_file "$f"; done
+    done
 }
 init_lang() {
     local l
@@ -767,13 +1023,51 @@ if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
 else
     R='' G='' Y='' B='' C='' W='' D='' NC=''
 fi
-sep()  { printf '%s\n' "${D}------------------------------------------------------------${NC}"; }
-hdr()  { printf '\n%s\n' "${B}== ${W}$*${B} ==${NC}"; sep; }
-ok()   { printf '%s\n' "  ${G}[OK]${NC} $*"; }
-warn() { printf '%s\n' "  ${Y}[!]${NC} $*"; }
-err()  { printf '%s\n' "  ${R}[X]${NC} $*" >&2; }
-info() { printf '%s\n' "  ${C}-->${NC} $*"; }
+# Unicode-Rahmen/Symbole, wenn das Terminal UTF-8 kann (RF4_ASCII=1 erzwingt ASCII)
+UNI=1
+[[ "${RF4_ASCII:-}" == "1" ]] && UNI=0
+[[ "$(locale charmap 2>/dev/null)" == "UTF-8" ]] || UNI=0
+if (( UNI )); then
+    G_TL='╔' G_TR='╗' G_BL='╚' G_BR='╝' G_H='═' G_V='║' G_LINE='─' G_OK='✔' G_WARN='!' G_ERR='✘' G_INFO='›' G_DOT='·' G_BAR='━' G_ON='■'
+else
+    G_TL='+' G_TR='+' G_BL='+' G_BR='+' G_H='=' G_V='|' G_LINE='-' G_OK='OK' G_WARN='!' G_ERR='X' G_INFO='>' G_DOT='-' G_BAR='=' G_ON='[X]'
+fi
+WIDTH=64
+rep() { local n="$1" s="$2" out="" i; for ((i = 0; i < n; i++)); do out+="$s"; done; printf '%s' "$out"; }
+disp_width() {   # Anzeigebreite: CJK/Fullwidth zählt doppelt
+    local s="$1" w=0 i ch cp
+    for ((i = 0; i < ${#s}; i++)); do
+        ch="${s:i:1}"; printf -v cp '%d' "'$ch" 2>/dev/null || cp=0
+        if (( (cp >= 0x1100 && cp <= 0x115F) || (cp >= 0x2E80 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7A3) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE30 && cp <= 0xFE6F) || (cp >= 0xFF00 && cp <= 0xFF60) )); then w=$((w + 2)); else w=$((w + 1)); fi
+    done
+    printf '%d' "$w"
+}
+sep()  { printf '%s\n' "  ${C}$(rep $((WIDTH - 4)) "$G_LINE")${NC}"; }
+hdr()  { local t=" $* " fill; fill=$(( WIDTH - 6 - $(disp_width "$t") )); (( fill < 2 )) && fill=2; printf '\n%s\n' "  ${C}$(rep 2 "$G_BAR")${t}$(rep "$fill" "$G_BAR")${NC}"; }
+ok()   { printf '%s\n' "  ${G}${G_OK}${NC} $*"; }
+warn() { printf '%s\n' "  ${Y}${G_WARN}${NC} ${Y}$*${NC}"; }
+err()  { printf '%s\n' "  ${R}${G_ERR}${NC} ${R}$*${NC}" >&2; }
+info() { printf '%s\n' "  ${C}${G_INFO}${NC} $*"; }
 log()  { case "$1" in ok) ok "$2" ;; warn) warn "$2" ;; err) err "$2" ;; *) info "$2" ;; esac; }
+box()  {   # box zeile1 zeile2 …
+    local inner=$((WIDTH - 4)) l pad
+    printf '%s\n' "  ${C}${G_TL}$(rep "$inner" "$G_H")${G_TR}${NC}"
+    for l in "$@"; do pad=$(( inner - 1 - $(disp_width "$l") )); (( pad < 0 )) && pad=0; printf '%s\n' "  ${C}${G_V}${NC} ${l}$(rep "$pad" ' ')${C}${G_V}${NC}"; done
+    printf '%s\n' "  ${C}${G_BL}$(rep "$inner" "$G_H")${G_BR}${NC}"
+}
+# Statistik der letzten Operation
+STAT_MSG=0 STAT_CONV=0 STAT_FILES=0 STAT_SHOTS=0 STAT_SKIP=0 STAT_FAIL=0
+reset_stats() { STAT_MSG=0 STAT_CONV=0 STAT_FILES=0 STAT_SHOTS=0 STAT_SKIP=0 STAT_FAIL=0; }
+print_summary() {
+    echo
+    printf '  %s' "${C}${G_ON} ${STAT_MSG}${NC} $(t sum_msgs)   ${G}${G_ON} ${STAT_CONV}${NC} $(t sum_convs)   ${G}${G_ON} ${STAT_FILES}${NC} $(t sum_files)   "
+    (( STAT_SHOTS > 0 )) && printf '%s' "${G}${G_ON} ${STAT_SHOTS}${NC} $(t sum_shots)   "
+    (( STAT_SKIP > 0 )) && printf '%s' "${Y}${G_ON} ${STAT_SKIP}${NC} $(t sum_skipped)   "
+    (( STAT_FAIL > 0 )) && printf '%s' "${R}${G_ON} ${STAT_FAIL}${NC} $(t sum_failed)   "
+    echo
+    if (( STAT_FAIL > 0 )); then err "$(t res_err "$STAT_FAIL")"; else ok "$(t res_ok)"; fi
+}
+
 pause() { echo; local _x; read -r -p "  $(t continue) " _x || true; }
 
 # ── Eingaben ───────────────────────────────────────────────────────────────────
@@ -1014,10 +1308,10 @@ merge_mailbox() {   # merge_mailbox srcdir dstdir [undoroot]
     while IFS=$'\t' read -r kind name extra; do
         extra="${extra%$'\r'}"; name="${name%$'\r'}"; kind="${kind%$'\r'}"
         case "$kind" in
-            COPIED)    copied=$((copied + 1)) ;;
+            COPIED)    copied=$((copied + 1)); STAT_CONV=$((STAT_CONV + 1)) ;;
             UNCHANGED) unchanged=$((unchanged + 1)) ;;
-            MERGED)    merged=$((merged + 1)); info "$(t mb_merge_file "$name" "$extra")" ;;
-            FAILED)    failed=$((failed + 1)); warn "$(t mb_merge_fail "$name" "$extra")" ;;
+            MERGED)    merged=$((merged + 1)); STAT_CONV=$((STAT_CONV + 1)); STAT_MSG=$((STAT_MSG + extra)); info "$(t mb_merge_file "$name" "$extra")" ;;
+            FAILED)    failed=$((failed + 1)); STAT_FAIL=$((STAT_FAIL + 1)); warn "$(t mb_merge_fail "$name" "$extra")" ;;
         esac
     done < <(PYTHONIOENCODING=utf-8 "$PYTHON" -c "$PY_MERGE" "$src" "$dst" "$undo" 2>&1)
     ok "$(t mb_summary "$merged" "$copied" "$unchanged")"
@@ -1039,12 +1333,12 @@ copy_datfile() {   # copy_datfile src dst [undoroot]
     if [[ -f "$dst" ]]; then
         if files_identical "$src" "$dst"; then info "$(t f_identical "$name")"; return; fi
         if ask_overwrite "$name"; then
-            save_undo "$dst" "$undo"; cp -f "$src" "$dst" && ok "$(t f_overwritten "$name")" || err "$(t f_failed "$name" cp)"
-        else warn "$(t f_skipped "$name")"; fi
+            save_undo "$dst" "$undo"; cp -f "$src" "$dst" && { STAT_FILES=$((STAT_FILES + 1)); ok "$(t f_overwritten "$name")"; } || { STAT_FAIL=$((STAT_FAIL + 1)); err "$(t f_failed "$name" cp)"; }
+        else STAT_SKIP=$((STAT_SKIP + 1)); warn "$(t f_skipped "$name")"; fi
         return
     fi
     mkdir -p "$(dirname "$dst")"
-    cp "$src" "$dst" && ok "$(t f_copied "$name")" || err "$(t f_failed "$name" cp)"
+    cp "$src" "$dst" && { STAT_FILES=$((STAT_FILES + 1)); ok "$(t f_copied "$name")"; } || { STAT_FAIL=$((STAT_FAIL + 1)); err "$(t f_failed "$name" cp)"; }
 }
 
 screenshot_dir() {   # screenshot_dir instpath [create]
@@ -1063,7 +1357,7 @@ copy_screenshots() {   # copy_screenshots srcdir dstdir
         t="$dst/$(basename "$f")"
         [[ -e "$t" ]] || { cp "$f" "$t" && n=$((n + 1)); }
     done < <(find "$src" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print0 2>/dev/null)
-    ok "$(t shots_done "$n" "$dst")"
+    STAT_SHOTS=$((STAT_SHOTS + n)); ok "$(t shots_done "$n" "$dst")"
 }
 
 # Gemeinsam für Backup UND Restore:  copy_rf4data src dst "items" "accounts" shots_src shots_dst undo
@@ -1092,6 +1386,72 @@ copy_rf4data() {
     if [[ -n "$undo" && -d "$undo" ]]; then info "$(t undo_saved "$undo")"; fi
 }
 
+# ── Vorhandene Backups ─────────────────────────────────────────────────────────
+cfg_backup_dirs() { [[ -f "$CONFIG_FILE" ]] && grep '^backup=' "$CONFIG_FILE" | cut -d= -f2-; return 0; }
+add_backup_dir() {
+    local d="$1" l n=1
+    d="$(cd "$d" 2>/dev/null && pwd -P)" || d="$1"
+    local -a keep=("$d")
+    while IFS= read -r l; do [[ -n "$l" && "$l" != "$d" && n -lt 8 ]] && { keep+=("$l"); n=$((n + 1)); }; done < <(cfg_backup_dirs)
+    mkdir -p "$CONFIG_DIR"
+    { [[ -f "$CONFIG_FILE" ]] && grep -v '^backup=' "$CONFIG_FILE"; for l in "${keep[@]}"; do printf 'backup=%s\n' "$l"; done; } > "$CONFIG_FILE.tmp" || true
+    mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+}
+looks_like_backup() {
+    local d="$1" f
+    [[ -d "$d" ]] || return 1
+    compgen -G "$d/Mailbox_*" >/dev/null 2>&1 && return 0
+    for f in "${DAT_FILES[@]}"; do [[ -f "$d/$f" ]] && return 0; done
+    [[ -d "$d/Screenshots" ]]
+}
+fmt_size() {
+    local b="$1"
+    if (( b >= 1073741824 )); then printf '%d.%d GB' $((b / 1073741824)) $((b % 1073741824 * 10 / 1073741824))
+    elif (( b >= 1048576 )); then printf '%d.%d MB' $((b / 1048576)) $((b % 1048576 * 10 / 1048576))
+    elif (( b >= 1024 )); then printf '%d KB' $((b / 1024))
+    else printf '%d B' "$b"; fi
+}
+fmt_time() { date -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$1"; }
+declare -a BK_PATH=() BK_NAME=() BK_TIME=() BK_SIZE=() BK_MBOX=() BK_CONV=() BK_FILES=() BK_SHOTS=()
+find_backups() {
+    BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=()
+    local -a bases=("$HOME/RF4_Backup") cand=() order=()
+    local -A seen=()
+    local l b c base f m latest size convs files shots i
+    while IFS= read -r l; do [[ -n "$l" ]] && bases+=("$l"); done < <(cfg_backup_dirs)
+    if [[ -n "${RF4_BACKUP_DIRS:-}" ]]; then IFS=':' read -ra cand <<< "$RF4_BACKUP_DIRS"; for l in "${cand[@]}"; do bases+=("$l"); done; fi
+    for b in "${bases[@]}"; do
+        [[ -d "$b" ]] || continue
+        b="${b%/}"
+        for c in "$b" "$b"/*/; do
+            c="${c%/}"; [[ -d "$c" ]] || continue
+            base="$(basename "$c")"
+            [[ "$c" != "$b" && ( "$base" == Mailbox_* || "$base" == "Screenshots" ) ]] && continue
+            [[ -n "${seen[$c]:-}" ]] && continue
+            looks_like_backup "$c" || continue
+            seen[$c]=1
+            load_mailboxes "$c"; convs=0; for m in "${MB_CONVS[@]:-0}"; do convs=$((convs + m)); done
+            files=0; for f in "${DAT_FILES[@]}"; do [[ -f "$c/$f" ]] && files=$((files + 1)); done
+            shots=0; [[ -d "$c/Screenshots" ]] && shots=$(find "$c/Screenshots" -type f 2>/dev/null | wc -l | tr -d ' ')
+            size=0; latest=0
+            while IFS= read -r -d '' f; do size=$((size + $(stat -c %s "$f" 2>/dev/null || stat -f %z "$f" 2>/dev/null || echo 0))); m=$(file_mtime "$f"); (( m > latest )) && latest=$m; done < <(find "$c" -type f -print0 2>/dev/null)
+            BK_PATH+=("$c"); BK_NAME+=("$base"); BK_TIME+=("$latest"); BK_SIZE+=("$size"); BK_MBOX+=("${#MB_NAME[@]}"); BK_CONV+=("$convs"); BK_FILES+=("$files"); BK_SHOTS+=("$shots")
+        done
+    done
+    # neueste zuerst
+    local -a sp=() sn=() st=() ss=() sm=() sc=() sf=() sh=()
+    while IFS=$'\t' read -r _ i; do sp+=("${BK_PATH[$i]}"); sn+=("${BK_NAME[$i]}"); st+=("${BK_TIME[$i]}"); ss+=("${BK_SIZE[$i]}"); sm+=("${BK_MBOX[$i]}"); sc+=("${BK_CONV[$i]}"); sf+=("${BK_FILES[$i]}"); sh+=("${BK_SHOTS[$i]}"); done < <(for i in "${!BK_PATH[@]}"; do printf '%s\t%s\n' "${BK_TIME[$i]}" "$i"; done | sort -rn)
+    BK_PATH=("${sp[@]:-}"); BK_NAME=("${sn[@]:-}"); BK_TIME=("${st[@]:-}"); BK_SIZE=("${ss[@]:-}"); BK_MBOX=("${sm[@]:-}"); BK_CONV=("${sc[@]:-}"); BK_FILES=("${sf[@]:-}"); BK_SHOTS=("${sh[@]:-}")
+    [[ -z "${BK_PATH[0]:-}" ]] && { BK_PATH=(); BK_NAME=(); BK_TIME=(); BK_SIZE=(); BK_MBOX=(); BK_CONV=(); BK_FILES=(); BK_SHOTS=(); }
+    return 0
+}
+bk_info() {   # bk_info index
+    local i="$1" s
+    s="$(t bk_mailbox_n "${BK_MBOX[$i]}" "${BK_CONV[$i]}")"
+    (( BK_FILES[i] > 0 )) && s+="  $G_DOT  $(t bk_files_n "${BK_FILES[$i]}")"
+    (( BK_SHOTS[i] > 0 )) && s+="  $G_DOT  $(t bk_shots_n "${BK_SHOTS[$i]}")"
+    printf '%s' "$s  $G_DOT  $(fmt_size "${BK_SIZE[$i]}")"
+}
 # ── Auswahl-Helfer ─────────────────────────────────────────────────────────────
 # select_accounts nameprefix titlekey → ACCOUNTS (leer = alle), ACC_BACK=1 bei Zurück
 select_accounts() {   # nutzt MB_* (vorher load_mailboxes)
@@ -1154,17 +1514,29 @@ do_backup() {
     read -r -p "  $(t backup_dir_p "$def") " dest || dest=""
     [[ -z "$dest" ]] && dest="$def"
     info "$(t from "$src")"; info "$(t to "$dest")"; sep
+    reset_stats
     copy_rf4data "$src" "$dest" "$items" "$ACCOUNTS" "$(screenshot_dir "$src")" "$dest/Screenshots" ""
-    echo; ok "$(t backup_done "$dest")"
+    add_backup_dir "$dest"
+    echo; ok "$(t backup_done "$dest")"; print_summary
     pause
 }
 
 # ── RESTORE ────────────────────────────────────────────────────────────────────
 do_restore() {
     hdr "$(t hdr_restore)"
-    local def="$HOME/RF4_Backup" src
-    read -r -p "  $(t backup_dir_p "$def") " src || src=""
-    [[ -z "$src" ]] && src="$def"
+    local def="$HOME/RF4_Backup" src="" bi
+    find_backups
+    if (( ${#BK_PATH[@]} > 0 )); then
+        local -a bopts=()
+        for bi in "${!BK_PATH[@]}"; do bopts+=("${BK_NAME[$bi]}   $G_DOT   $(fmt_time "${BK_TIME[$bi]}")"$'\n'"        ${BK_PATH[$bi]}"$'\n'"        $(bk_info "$bi")"); done
+        bopts+=("$(t manual_path)")
+        menu "$(t pick_backup_list)" "${bopts[@]}"; (( MENU_CHOICE == 0 )) && return
+        (( MENU_CHOICE <= ${#BK_PATH[@]} )) && src="${BK_PATH[$((MENU_CHOICE - 1))]}"
+    else warn "$(t no_backup_found_cli)"; fi
+    if [[ -z "$src" ]]; then
+        read -r -p "  $(t backup_dir_p "$def") " src || src=""
+        [[ -z "$src" ]] && src="$def"
+    fi
     [[ -d "$src" ]] || { err "$(t folder_missing "$src")"; pause; return; }
     load_mailboxes "$src"
     local -a bk_names=("${MB_NAME[@]}") bk_ids=("${MB_ID[@]}") bk_convs=("${MB_CONVS[@]}") bk_files=()
@@ -1200,8 +1572,10 @@ do_restore() {
     fi
     confirm_game_closed || { warn "$(t cancelled)"; pause; return; }
     info "$(t importing_to "$dst")"; sep
+    reset_stats
     copy_rf4data "$src" "$dst" "$items" "$ACCOUNTS" "$src/Screenshots" "$(screenshot_dir "$dst" create)" "$(new_undo_root "$dst")"
-    ok "$(t restore_done)"
+    add_backup_dir "$(dirname "$src")"
+    ok "$(t restore_done)"; print_summary
     pause
 }
 
@@ -1223,6 +1597,7 @@ do_merge() {
     confirm_game_closed || { warn "$(t cancelled)"; pause; return; }
     local dpath="${INST_PATH[$di]}" undo; undo=$(new_undo_root "$dpath")
     info "$(t to "$dpath")"; sep
+    reset_stats
     local k si
     for k in "${MULTI_SEL[@]}"; do
         si="${src_idx[$k]}"
@@ -1231,7 +1606,7 @@ do_merge() {
         (( ACC_BACK )) && continue
         copy_rf4data "${INST_PATH[$si]}" "$dpath" "mail" "$ACCOUNTS" "" "" "$undo"
     done
-    ok "$(t merge_done)"
+    ok "$(t merge_done)"; print_summary
     pause
 }
 
@@ -1318,7 +1693,7 @@ do_sync() {
                    ci="${EXIST_IDX[$((MENU_CHOICE - 1))]}"
                fi
                confirm_game_closed || { warn "$(t cancelled)"; pause; continue; }
-               do_sync_run "${INST_PATH[$ci]}" "$sp"
+               reset_stats; do_sync_run "${INST_PATH[$ci]}" "$sp"; print_summary
                pause ;;
             *) warn "$(t invalid)" ;;
         esac
@@ -1339,10 +1714,8 @@ main_menu() {
     local raw
     while true; do
         [[ -t 1 ]] && clear 2>/dev/null
-        printf '%s\n' "${B}============================================================${NC}"
-        printf '%s\n' "${B}  $(t app_title)   v${TOOL_VERSION}${NC}"
-        printf '%s\n' "${B}============================================================${NC}"
-        printf '%s\n' "  ${D}RF4: nga.li/rf4de | Blog: nga.li/rf4b${NC}" "  ${D}$(t donate)${NC}" ""
+        box "$(t app_title)   v${TOOL_VERSION}" "RF4: nga.li/rf4de  $G_DOT  Blog: nga.li/rf4b" "$(t donate)"
+        echo
         printf '%s\n' "  ${Y}[1]${NC} $(t menu_scan)" "  ${Y}[2]${NC} $(t menu_backup)" "  ${Y}[3]${NC} $(t menu_restore)" \
                       "  ${Y}[4]${NC} $(t menu_merge)" "  ${Y}[5]${NC} $(t menu_sync)" \
                       "  ${Y}[L]${NC} $(t menu_lang) (${LANG_NAMES[$LANG_CODE]})" "  ${Y}[0]${NC} $(t exit)" ""
@@ -1364,6 +1737,7 @@ while (( $# > 0 )); do
         *) shift ;;
     esac
 done
+load_external_langs
 init_lang "$ARG_LANG"
 if (( SHOW_HELP )); then echo "$(t usage)"; exit 0; fi
 if [[ "${RF4_NO_MAIN:-0}" != "1" ]]; then main_menu; fi

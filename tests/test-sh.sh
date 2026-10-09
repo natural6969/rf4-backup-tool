@@ -152,15 +152,62 @@ echo; echo "[6] Menü per Eingabe (alle Sprachen, Sprachwechsel)"
 export RF4_SCAN_USERS=""
 for l in de en zh ru; do
     out=$(printf '1\n\n0\n' | bash "$SCRIPT" -l "$l" 2>&1)
-    check "Scan-Menü ($l) zeigt Steam-Installation und Titel" '[[ "$out" == *"RussianFishing4Steam"* && "$out" == *"v1.4.0"* ]]' "$(echo "$out" | head -5)"
+    check "Scan-Menü ($l) zeigt Steam-Installation und Titel" '[[ "$out" == *"RussianFishing4Steam"* && "$out" == *"v1.5.0"* ]]' "$(echo "$out" | head -5)"
 done
 out=$(printf 'l\n3\n0\n' | bash "$SCRIPT" -l de 2>&1)
 check "Sprachwechsel im Menü (L → 中文) gespeichert" '[[ "$(cfg_get lang)" == zh ]]' "$(cfg_get lang)"
 out=$(printf '0\n' | RF4_LANG="" bash "$SCRIPT" 2>&1)
 check "Neustart nutzt gespeicherte Sprache (zh)" '[[ "$out" == *"扫描"* ]]' "$(echo "$out" | head -8)"
-out=$(printf '9\n0\n' | bash "$SCRIPT" 2>&1); check "Ungültige Hauptmenü-Eingabe crasht nicht" '[[ "$out" == *"v1.4.0"* ]]'
+out=$(printf '9\n0\n' | bash "$SCRIPT" 2>&1); check "Ungültige Hauptmenü-Eingabe crasht nicht" '[[ "$out" == *"v1.5.0"* ]]'
 out=$(bash "$SCRIPT" -h -l en 2>&1); check "--help" '[[ "$out" == *Usage* ]]' "$out"
 out=$(printf '' | bash "$SCRIPT" -l en 2>&1; echo "rc=$?"); check "EOF auf stdin beendet sauber" '[[ "$out" == *rc=0* ]]' "$out"
+
+
+echo; echo "[7] Backups finden, Statistik, Module, Banner"
+export RF4_SCAN_USERS=""
+find_backups; check "Find-Backups: ohne Backups leer" '(( ${#BK_PATH[@]} == 0 ))'
+reset_stats
+copy_rf4data "$STEAM" "$HOME/RF4_Backup" "mail Settings.dat" "" "" "" "" </dev/null >/dev/null
+check "Statistik nach Backup: 2 Konversationen, 1 Datei, 0 Nachrichten" '(( STAT_CONV == 2 && STAT_FILES == 1 && STAT_MSG == 0 ))' "conv=$STAT_CONV files=$STAT_FILES msg=$STAT_MSG"
+reset_stats; copy_rf4data "$STEAM" "$HOME/RF4_Backup" "mail Settings.dat" "" "" "" "" </dev/null >/dev/null
+check "Statistik zweiter Lauf: nichts Neues" '(( STAT_CONV == 0 && STAT_FILES == 0 && STAT_MSG == 0 ))'
+find_backups
+check "Find-Backups: Standardordner erkannt (2 Mailboxen, 2 Konv.)" '(( ${#BK_PATH[@]} >= 1 )) && [[ "${BK_PATH[0]}" == "$HOME/RF4_Backup" ]] && (( BK_MBOX[0] == 2 && BK_CONV[0] == 2 ))' "${BK_PATH[*]} ${BK_MBOX[*]} ${BK_CONV[*]}"
+MULTI="$TMP/mybackups"
+copy_rf4data "$STEAM" "$MULTI/Steam_alt" "mail" "" "" "" "" </dev/null >/dev/null
+copy_rf4data "$DE" "$MULTI/DE_neu" "mail Settings.dat" "" "" "" "" </dev/null >/dev/null
+touch -d 'tomorrow' "$MULTI/DE_neu/Settings.dat" 2>/dev/null || touch -t 203001010000 "$MULTI/DE_neu/Settings.dat"
+RF4_BACKUP_DIRS="$MULTI" find_backups
+names=" ${BK_NAME[*]} "
+check "Find-Backups: Unterordner eines Zusatzordners" '[[ "$names" == *" Steam_alt "* && "$names" == *" DE_neu "* ]]' "$names"
+check "Find-Backups: neueste zuerst" '[[ "${BK_NAME[0]}" == DE_neu ]]' "${BK_NAME[*]}"
+check "bk_info: Inhalt + Größe" '[[ "$(bk_info 0)" == *"·"* || "$(bk_info 0)" == *" - "* ]] && [[ "$(bk_info 0)" != *"{0}"* ]]' "$(bk_info 0)"
+add_backup_dir "$TMP/a"; add_backup_dir "$TMP/b"; add_backup_dir "$TMP/a"
+check "add_backup_dir: ohne Duplikate, neueste zuerst" '[[ "$(cfg_backup_dirs | wc -l | tr -d " ")" == 2 && "$(cfg_backup_dirs | head -1)" == *"/a" ]]' "$(cfg_backup_dirs)"
+for i in 1 2 3 4 5 6 7 8 9 10; do add_backup_dir "$TMP/x$i"; done
+check "add_backup_dir: maximal 8" '[[ "$(cfg_backup_dirs | wc -l | tr -d " ")" == 8 ]]'
+check "Sprachreihenfolge de en zh ru" '[[ "${LANGS[*]:0:4}" == "de en zh ru" ]]' "${LANGS[*]}"
+# externe Sprache
+mkdir -p "$CONFIG_DIR/lang"
+printf '# Test\n@code=pt\n@name=Português\napp_title=RF4 Cópia e Migração\nmenu_scan=Procurar = tudo\n' > "$CONFIG_DIR/lang/pt.lang"
+load_external_langs
+check "Externe Sprache pt geladen (LANGS + Name)" '[[ " ${LANGS[*]} " == *" pt "* && "${LANG_NAMES[pt]}" == "Português" ]]' "${LANGS[*]}"
+LANG_CODE=pt
+check "pt: eigener Text mit = korrekt, fehlender Schlüssel → Englisch" '[[ "$(t app_title)" == "RF4 Cópia e Migração" && "$(t menu_scan)" == "Procurar = tudo" && "$(t exit)" == "Exit" ]]' "$(t menu_scan) / $(t exit)"
+check "resolve_lang pt-BR → pt" '[[ "$(resolve_lang pt_BR.UTF-8)" == pt ]]'
+LANG_CODE=de; rm -rf "$CONFIG_DIR/lang"
+# Banner
+out=$(LANG_CODE=de box "RF4 Backup" "zeile 2")
+w1=$(echo "$out" | sed -n 1p | wc -m); w2=$(echo "$out" | sed -n 2p | wc -m)
+check "Banner-Rahmen: Zeilen gleich lang (Zeichen)" '[[ "$w1" == "$w2" ]]' "$w1 vs $w2"
+LANG_CODE=zh; out=$(box "$(t app_title)" "$(t donate)")
+w=$(disp_width "$(echo "$out" | sed -n 2p | sed 's/^  //')"); w3=$(disp_width "$(echo "$out" | sed -n 1p | sed 's/^  //')")
+check "Banner (zh): Anzeigebreite aller Zeilen gleich ($w3)" '[[ "$w" == "$w3" ]]' "$w vs $w3"
+LANG_CODE=de
+check "disp_width: ASCII=1, CJK=2" '[[ "$(disp_width abc)" == 3 && "$(disp_width 备份)" == 4 ]]' "$(disp_width 备份)"
+out=$(RF4_ASCII=1 bash "$SCRIPT" -l en </dev/null 2>&1); check "ASCII-Modus: keine Rahmenzeichen" '[[ "$out" != *"╔"* && "$out" == *"+====="* ]]' "$(echo "$out" | head -3)"
+out=$(printf '3\n1\n0\n0\n' | bash "$SCRIPT" -l en 2>&1)
+check "Restore-Menü listet Backups (Name, Pfad, Inhalt)" '[[ "$out" == *"Choose a backup"* && "$out" == *"RF4_Backup"* && "$out" == *"conversations"* ]]' "$(echo "$out" | head -12)"
 
 echo
 printf 'Ergebnis: %d bestanden, %d fehlgeschlagen\n' "$PASS" "$FAIL"

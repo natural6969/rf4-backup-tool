@@ -1,0 +1,18 @@
+# RF4 Backup Tool - Theme. Eigene Themes: Datei in themes\ (neben dem Skript) oder %APPDATA%\rf4-backup\themes\ ablegen.
+# @base = dark|light  (welcher Windows-Modus dieses Theme bei 'Automatisch' ersetzt)
+@code=dark
+@name=Marine / Navy
+@base=dark
+bg=#0B1B2B
+surface=#12293F
+surface2=#1A3652
+border=#27445F
+text=#E8EEF4
+muted=#8FA6BC
+accent=#F2A93B
+accentHover=#FFBD5C
+accentText=#1B1204
+success=#3DD68C
+warn=#F2C94C
+danger=#FF6B6B
+selection=#1F4469

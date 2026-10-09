@@ -1,0 +1,17 @@
+# RF4 Backup Tool - Theme (hell)
+@code=light
+@name=Hell / Light
+@base=light
+bg=#F3F6FA
+surface=#FFFFFF
+surface2=#E9F0F7
+border=#D0DCE8
+text=#13253A
+muted=#5A7186
+accent=#C77700
+accentHover=#DB8A10
+accentText=#1B1204
+success=#1E9E62
+warn=#B7791F
+danger=#D64545
+selection=#DCEAF8
