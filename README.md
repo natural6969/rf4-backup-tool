@@ -1,176 +1,113 @@
-# RF4 Standalone — Backup & Migration Tool
+# RF4 — Backup & Migration Tool
 
 Kostenloses Tool zum Sichern und Übertragen von Russian Fishing 4 Spielerdaten:
 Mailboxen (In-Game-Chats), Einstellungen, Screenshots.
+Für **Windows** (GUI + Terminal, PowerShell) und **Linux/macOS** (Bash).
 
-Für Windows (PowerShell, mit GUI) und Linux (Bash).
+**Sprachen / Languages / 语言 / Языки:** Deutsch · English · 中文 · Русский — komplett umschaltbar im Programm
+(GUI: Auswahlfeld oben rechts · Terminal: Menüpunkt **[L]** · Start-Parameter `-Lang de|en|zh|ru` bzw. `-l xx` · Umgebungsvariable `RF4_LANG`).
+Die Wahl wird gespeichert.
 
-📄 **Vollständige Anleitung:** [nga.li/rf4b](https://nga.li/rf4b)
-📥 **Direkter Download:** [nga.li/rf4dl](https://nga.li/rf4dl)
-🎬 **Video Walkthrough:** *(in Produktion — alle 5 Funktionen gezeigt)*
-
----
-
-## Installer (Windows)
-
-| Datei | Beschreibung |
-|---|---|
-| `rf4sa-backup-gui-setup-v1.2.0.exe` | GUI-Version — empfohlen für Einsteiger |
-| `rf4sa-backup-cli-setup-v1.2.0.exe` | CLI-Version (Terminal) |
-| `rf4sa-backup-full-setup-v1.2.0.exe` | GUI + CLI zusammen |
-
-→ Download unter [Releases](../../releases)
+📄 **Anleitung:** [nga.li/rf4b](https://nga.li/rf4b) · 📥 **Download:** [nga.li/rf4dl](https://nga.li/rf4dl)
 
 ---
 
-## Dateien (ohne Installer)
+## Dateien
 
 | Datei | Plattform | Beschreibung |
 |---|---|---|
-| `rf4sa-backup-gui.ps1` | Windows 10/11 | Grafische Oberfläche — direkt ausführbar, kein Installer nötig |
+| `rf4sa-backup-gui.ps1` | Windows 7/10/11 | Grafische Oberfläche (Schritt-für-Schritt) |
 | `rf4sa-backup.ps1` | Windows 7/10/11 | Terminal-Version (Textmenü) |
-| `rf4sa-backup.sh` | Linux, macOS | Bash-Script — Wine & Proton automatisch erkannt |
+| `rf4sa-backup.sh` | Linux, macOS, Git-Bash | Bash-Version — Windows-Partitionen, Wine und Steam-Proton werden erkannt |
+| `installer/*.iss` | Windows | InnoSetup-Skripte für die Installer (`.exe`) |
 
----
-
-## Was wird gesichert?
-
-- **Mailboxen** — In-Game-Chats zwischen Spielern (lokal gespeichert, nicht auf RF4-Servern)
-- **Settings.dat** — Grafik, Audio, Tastenbelegung
-- **Preferences.dat** — weitere Spieleinstellungen
-- **Crafting.dat** — Craftingdaten
-- **Screenshots**
-
-Spielstand, Inventar und Angelausrüstung liegen auf den RF4-Servern und sind beim PC-Wechsel automatisch da.
-
----
+Kein Installer nötig: Rechtsklick auf `rf4sa-backup-gui.ps1` → „Mit PowerShell ausführen“.
 
 ## Funktionen
 
-- **Scan** — findet alle RF4-Installationen automatisch (Windows, Wine, Steam/Proton)
-- **Backup** — sichert Daten in einen Ordner deiner Wahl
-- **Restore** — importiert ein Backup in eine Installation
-- **Merge** — führt zwei Installationen zusammen (nur fehlende Nachrichten werden ergänzt, nichts überschrieben)
-- **Cloud / NAS Sync** — bidirektionaler Sync zwischen mehreren Geräten über Nextcloud, Syncthing, NAS-Netzlaufwerk, USB-Stick oder jeden gemeinsamen Ordner
+- **Scan** — findet alle RF4-Installationen (DE / EN / Steam / weitere Ordner unter `RussianFishingLLC`, alle Benutzer und Laufwerke)
+- **Backup** — Mailboxen (alle oder ein Account), Settings.dat, Preferences.dat, Crafting.dat, Screenshots
+- **Restore** — Backup in eine Installation importieren (Nachrichten werden zusammengeführt)
+- **Merge** — Installationen zusammenführen: nur fehlende Nachrichten werden ergänzt (Dedup über Nachrichten-ID, sortiert nach Zeit)
+- **Cloud / NAS Sync** — bidirektional über jeden gemeinsamen Ordner (Nextcloud, Syncthing, NAS, USB); Einstellungsdateien: neuere gewinnt
 
----
+## Sicherheit
 
-## Benutzung
+- **Es wird nichts gelöscht.** Backup und Scan lesen nur.
+- Bei Restore / Merge / Sync wird jede **zu ersetzende Datei vorher** nach `<Installation>\_rf4tool_undo\<Zeitstempel>\` kopiert.
+- Nachrichten-Dateien werden nur geschrieben, wenn tatsächlich neue Nachrichten dazukommen; geschrieben wird über eine Temp-Datei und erst nach erfolgreicher Gegenprobe ersetzt.
+- RF4 wird vor Restore/Merge/Sync als laufender Prozess erkannt (Warnung) — bitte das Spiel vorher beenden.
 
-### Windows — Cloud / NAS Sync
+SHA256-Prüfsummen: siehe [CHECKSUMS.txt](CHECKSUMS.txt) (`Get-FileHash <datei>` bzw. `sha256sum <datei>`).
+Die GUI zeigt oben rechts den eigenen SHA256-Hash (Klick = kopieren).
 
-Menüpunkt **[5] Sync** → Sync-Ordner angeben (Nextcloud, Syncthing, NAS `N:\`, USB-Stick oder jeder gemeinsame Ordner) → Sync starten.
-
-Der Sync läuft bidirektional:
-- **Phase 1** – Lokale Mailboxen werden in den Sync-Ordner gemergt (Push)
-- **Phase 2** – Neue Nachrichten aus dem Sync-Ordner werden lokal übernommen (Pull)
-- Settings.dat / Preferences.dat / Crafting.dat: neuere Datei gewinnt (Zeitstempel-Vergleich)
-
----
-
-### Windows — Installer (empfohlen)
-
-`rf4sa-backup-gui-setup-v1.2.0.exe` herunterladen und ausführen. Installiert das Tool systemweit.
-
-### Windows — GUI (ohne Installer)
+## Ablageorte der Daten
 
 ```
-Rechtsklick auf rf4sa-backup-gui.ps1 → "Mit PowerShell ausführen"
+%APPDATA%\RussianFishingLLC\<Variante>\Mailbox_<AccountID>\*.dat    (JSON, UTF-8 mit BOM)
+%APPDATA%\RussianFishingLLC\<Variante>\Settings.dat / Preferences.dat / Crafting.dat
+Dokumente\Russian Fishing 4\Screenshots
 ```
 
-Das Fenster öffnet sich direkt.
-
-### Windows — Terminal
-
-```powershell
-powershell -ExecutionPolicy Bypass -File rf4sa-backup.ps1
-```
-
-### Linux
-
-```bash
-chmod +x rf4sa-backup.sh
-bash rf4sa-backup.sh
-```
-
----
-
-## Sicherheit & Verifikation
-
-Das Tool **verändert keine Originaldaten** — es erstellt ausschließlich Kopien.
-
-Der Quellcode ist vollständig in diesen Dateien einsehbar.
-
-SHA256-Prüfsummen verifizieren:
-
-```powershell
-# Windows
-Get-FileHash rf4sa-backup-gui.ps1 -Algorithm SHA256
-Get-FileHash rf4sa-backup.ps1     -Algorithm SHA256
-Get-FileHash rf4sa-backup.sh      -Algorithm SHA256
-```
-
-```bash
-# Linux
-sha256sum rf4sa-backup-gui.ps1 rf4sa-backup.ps1 rf4sa-backup.sh
-```
-
-Erwartete Hashes → siehe [CHECKSUMS.txt](CHECKSUMS.txt)
-
----
-
-## Unterstützte RF4-Varianten
-
-| Ordnername | Bezeichnung |
-|---|---|
-| `RussianFishing4DE` | RF4 Standalone Deutsch |
-| `RussianFishing4DE_new` | RF4 Standalone Deutsch (neu) |
-| `RussianFishing4EN` | RF4 Standalone Englisch |
-| `RussianFishing4Steam` | RF4 Steam (via Proton/Wine) |
-
----
+Varianten: `RussianFishing4DE`, `RussianFishing4DE_new`, `RussianFishing4EN`, `RussianFishing4Steam` (weitere Ordner werden automatisch erkannt).
 
 ## Typische Anwendungsfälle
 
-**PC-Wechsel / Neuinstallation:**
-1. Auf altem PC: Backup erstellen
-2. RF4 auf neuem PC installieren und einmal starten
-3. Backup → Restore auf neuen PC
-
-**Steam → Standalone wechseln:**
-1. Steam-Installation scannen
-2. Merge: Steam als Quelle, Standalone als Ziel
-
-**Wichtig:** RF4 erlaubt offiziell nur Steam → Standalone, nicht umgekehrt.
-Details: [nga.li/rf4transfer](https://nga.li/rf4transfer)
-
----
+**PC-Wechsel:** Auf dem alten PC *Backup* → RF4 auf dem neuen PC einmal starten → *Restore*.
+**Steam → Standalone:** *Merge* mit Steam als Quelle und Standalone als Ziel. RF4 erlaubt offiziell nur Steam → Standalone, nicht umgekehrt ([nga.li/rf4transfer](https://nga.li/rf4transfer)).
+**Mehrere Geräte:** *Sync* mit einem gemeinsamen Ordner auf jedem Gerät.
 
 ## Voraussetzungen
 
-**Windows:**
-- PowerShell 5.1 (ab Windows 7 vorinstalliert)
-- Python 3 (nur für Mailbox-Merge, optional — wird automatisch erkannt)
+- **Windows:** Windows PowerShell 5.1 (ab Windows 10 vorinstalliert; Windows 7 mit WMF 5.1). Python wird **nicht** benötigt.
+- **Linux/macOS:** bash ≥ 4 (macOS: `brew install bash`) und `python3` (nur zum Zusammenführen der Nachrichten-Dateien).
 
-**Linux:**
-- bash, python3, jq (meist vorinstalliert)
-- `sshpass` oder `jq` nur wenn explizit benötigt
+## Entwicklung
+
+Der Quellcode liegt in `src/` (`core.ps1` = gemeinsame Logik + alle Übersetzungen, `cli.ps1`, `gui.ps1`, `cli.sh`).
+`build.ps1` erzeugt daraus die ausgelieferten Einzeldateien (auch die Übersetzungstabelle des Bash-Skripts wird aus `core.ps1` erzeugt — eine Quelle für alle Plattformen).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1
+powershell -ExecutionPolicy Bypass -File tests\Test-Core.ps1 [-RealDataDir <Mailbox-Ordner>]   # Logik, Übersetzungen, Merge, Sync
+powershell -STA -ExecutionPolicy Bypass -File tests\Test-Gui.ps1                               # GUI: alle Panels × 4 Sprachen, Textüberlauf, Button-Läufe
+bash tests/test-sh.sh                                                                          # Linux-Skript
+```
+
+Neue Sprache oder neuer Text: Eintrag in `src/core.ps1` (`X 'schluessel' 'de' 'en' 'zh' 'ru'`), `build.ps1` ausführen — die Tests prüfen, dass jeder Schlüssel in allen Sprachen vorhanden ist und die Platzhalter `{0}`, `{1}` übereinstimmen.
+
+## Änderungen
+
+**1.4.0**
+- Komplett überarbeitet auf gemeinsamem Kern: Terminal, GUI und Bash nutzen dieselbe Logik und dieselbe Übersetzungstabelle.
+- **Alles** ist übersetzt (DE/EN/ZH/RU), nicht nur die Menüs; Sprache jederzeit umschaltbar und gespeichert.
+- Fix: Die **eigene Installation wurde nie gefunden** (Benutzerordner wurde eine Ebene zu niedrig aus `%APPDATA%` abgeleitet).
+- Fix: Abstürze bei genau einer Mailbox/Datei oder leerer Installation (`StrictMode` + `.Count` in PowerShell 5.1).
+- Fix: Screenshots wurden beim Restore nicht kopiert (`-Include` ohne `-Recurse`).
+- Merge schreibt nur noch bei neuen Nachrichten, atomar mit Gegenprobe; Undo-Ordner für ersetzte Dateien.
+- Warnung, wenn RF4 läuft; GUI: Sprachwahl, Account-Auswahl, Fortschritts-/Ergebnisansicht, korrekte Anzeige von „&“.
+- Automatische Tests (228 Prüfungen) und `build.ps1`.
+
+**1.3.0** i18n (nur Menüs), InnoSetup-Installer · **1.2.0** Cloud/NAS-Sync · **1.1.x** Account-IDs, Multi-Quellen-Merge · **1.0.0** Erstveröffentlichung
 
 ---
 
-## Lizenz
+## English summary
 
-MIT License — frei verwendbar, veränderbar und weitergabe-erlaubt.
+Free backup & migration tool for **Russian Fishing 4** player data (in-game mailboxes, settings, screenshots) for Windows (GUI + terminal, PowerShell 5.1) and Linux/macOS (bash + python3).
+The whole interface is available in **German, English, Chinese and Russian** and can be switched at any time (GUI language box, terminal menu **[L]**, `-Lang xx`, or `RF4_LANG=xx`).
+Nothing is ever deleted; files that get replaced are first copied to `<installation>\_rf4tool_undo\<timestamp>`. Close RF4 before restore/merge/sync.
+
+## 中文简介
+
+用于 **Russian Fishing 4** 玩家数据（游戏内邮箱、设置、截图）的免费备份与迁移工具，支持 Windows（图形界面 + 终端）和 Linux/macOS。
+界面完整支持 **德语、英语、中文、俄语**，可随时切换。工具不会删除任何文件；被替换的文件会先保存到 `_rf4tool_undo` 文件夹。恢复/合并/同步前请先关闭游戏。
+
+## Кратко по-русски
+
+Бесплатный инструмент резервного копирования и переноса данных игрока **Russian Fishing 4** (игровая почта, настройки, скриншоты) для Windows (GUI + терминал) и Linux/macOS.
+Интерфейс полностью доступен на **немецком, английском, китайском и русском** языках и переключается в любой момент. Ничего не удаляется; заменяемые файлы сначала копируются в `_rf4tool_undo`. Перед восстановлением/объединением/синхронизацией закройте игру.
 
 ---
 
-## Links
-
-| | |
-|---|---|
-| RF4 Offiziell (DE) | [nga.li/rf4de](https://nga.li/rf4de) |
-| RF4 Offiziell (EN) | [nga.li/rf4en](https://nga.li/rf4en) |
-| RF4 auf Steam | [nga.li/rf4steam](https://nga.li/rf4steam) |
-| Steam → Standalone Transfer | [nga.li/rf4transfer](https://nga.li/rf4transfer) |
-| Forum | [nga.li/rf4forum](https://nga.li/rf4forum) |
-| Artikel & Anleitung | [nga.li/rf4b](https://nga.li/rf4b) |
+MIT License · Spenden / Donate: [paypal.me/bjoernoppermann](https://paypal.me/bjoernoppermann) · [Codeberg](https://codeberg.org/Natural78/rf4-backup-tool)

@@ -14,3 +14,7 @@ desktop.ini
 *.tmp
 RF4_Backup/
 test/
+
+# Build / Tests
+installer/output/
+tests/shots/

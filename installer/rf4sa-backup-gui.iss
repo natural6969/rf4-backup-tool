@@ -1,5 +1,5 @@
 #define AppName      "RF4 Backup Tool - GUI"
-#define AppVersion   "1.2.0"
+#define AppVersion   "1.4.0"
 #define AppPublisher "Natural (Bjoern)"
 #define AppURL       "https://codeberg.org/Natural78/rf4-backup-tool"
 
@@ -17,7 +17,7 @@ AllowNoIcons=yes
 LicenseFile=../LICENSE
 InfoAfterFile=README.txt
 OutputDir=output
-OutputBaseFilename=rf4sa-backup-gui-setup-v1.2.0
+OutputBaseFilename=rf4sa-backup-gui-setup-v1.4.0
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -37,8 +37,8 @@ Source: "../LICENSE";               DestDir: "{app}"; Flags: ignoreversion
 Source: "README.txt";            DestDir: "{app}"; Flags: ignoreversion isreadme
 
 [Icons]
-Name: "{group}\RF4 Backup Tool (GUI)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup-gui.ps1'"""; WorkingDir: "{app}"; Comment: "RF4 Savegame Backup - GUI"
-Name: "{commondesktop}\RF4 Backup Tool (GUI)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup-gui.ps1'"""; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\RF4 Backup Tool (GUI)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\rf4sa-backup-gui.ps1"""; WorkingDir: "{app}"; Comment: "RF4 Savegame Backup - GUI"
+Name: "{autodesktop}\RF4 Backup Tool (GUI)"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\rf4sa-backup-gui.ps1"""; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""& '{app}\rf4sa-backup-gui.ps1'"""; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\rf4sa-backup-gui.ps1"""; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

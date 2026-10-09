@@ -1,0 +1,6 @@
+# Ausgelieferte Dateien exakt so speichern, wie gebaut (damit CHECKSUMS.txt auch f?r Roh-Downloads stimmt)
+*.ps1 -text
+*.sh -text
+*.exe binary
+CHECKSUMS.txt -text
+*.iss -text
